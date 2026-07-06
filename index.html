@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>허그 클럽</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- ▼▼▼ Firebase SDK (CDN) ▼▼▼ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --bg: #fbf3e4;
+    --bg-soft: #f3e7d3;
+    --card-bg: #fffdf8;
+    --ink: #5b4636;
+    --ink-dim: #8a7a68;
+    --ink-faint: #b3a692;
+    --accent: #e38c9c;
+    --accent-hover: #dd7387;
+    --accent-text: #4a1220;
+    --paper-1: #fddcc2;
+    --paper-2: #f6c9d6;
+    --paper-3: #dad4f2;
+    --paper-4: #cfe8d9;
+    --dot-1: #f2a65a;
+    --dot-2: #e38c9c;
+    --dot-3: #8fa8d1;
+    --dot-4: #7fbf9e;
+    --dot-5: #c99bde;
+    --dot-6: #d9b04c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height:100vh;
+  }
+  .topbar{
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: linear-gradient(180deg, var(--bg) 78%, transparent);
+    padding: 28px 24px 18px;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .brand h1{
+    font-weight: 700;
+    font-size: 30px;
+    margin: 0 0 4px;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+  }
+  .brand p{ margin:0; font-size: 14px; color: var(--ink-dim); }
+  .write-btn{
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 12px 20px;
+    border-radius: 999px;
+    cursor: pointer;
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    transition: transform 0.15s ease, background 0.15s ease;
+    white-space: nowrap;
+  }
+  .write-btn:hover{ background: var(--accent-hover); transform: translateY(-1px); }
+  .write-btn:active{ transform: scale(0.97); }
+
+  .board-wrap{ padding: 8px 24px 80px; max-width: 1180px; margin: 0 auto; }
+  .board{ columns: 4 260px; column-gap: 20px; }
+  @media (max-width: 700px){ .board{ columns: 1 260px; } }
+
+  .empty-state{ text-align:center; padding: 80px 20px; color: var(--ink-dim); }
+  .empty-state h2{ font-weight: 700; font-size: 21px; color: var(--ink); margin: 0 0 10px; }
+  .empty-state p{ margin: 0 0 20px; font-size: 14px; line-height:1.7; }
+
+  .note{
+    break-inside: avoid;
+    margin: 0 0 22px;
+    padding: 22px 20px 16px;
+    border-radius: 3px;
+    position: relative;
+    box-shadow: 0 8px 18px rgba(91,70,54,0.14);
+    color: var(--ink);
+    display:inline-block;
+    width:100%;
+  }
+  .note::before{
+    content:'';
+    position:absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%) rotate(var(--tape-rot, -3deg));
+    width: 56px;
+    height: 20px;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(255,255,255,0.4);
+  }
+  .note-text{
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 4px 0 18px;
+  }
+  .note-footer{ display:flex; align-items:center; justify-content: space-between; gap: 8px; }
+  .hug-count{ font-size: 12px; color: rgba(91,70,54,0.6); font-weight: 500; }
+  .note-actions{ display:flex; align-items:center; gap: 6px; }
+  .icon-btn{
+    position: relative;
+    border: none;
+    background: rgba(91,70,54,0.08);
+    color: var(--ink);
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display:flex;
+    align-items:center;
+    gap: 5px;
+    transition: background 0.15s ease, transform 0.1s ease;
+    overflow: visible;
+  }
+  .icon-btn:hover{ background: rgba(91,70,54,0.15); }
+  .icon-btn:active{ transform: scale(0.95); }
+  .icon-btn.hugged{ background: rgba(91,70,54,0.05); color: rgba(91,70,54,0.5); cursor: default; }
+  .icon-btn svg{ width: 15px; height: 15px; }
+
+  .anim-layer{ position:absolute; inset:0; pointer-events:none; overflow: visible; border-radius: 3px; }
+  .arm{
+    position:absolute; top: 50%; width: 46%; height: 90px; margin-top: -45px;
+    border: 10px solid var(--accent-hover); opacity: 0;
+  }
+  .arm-left{ left: -6%; border-right: none; border-radius: 90px 0 0 90px; transform: translateX(-60%) rotate(-8deg); }
+  .arm-right{ right: -6%; border-left: none; border-radius: 0 90px 90px 0; transform: translateX(60%) rotate(8deg); }
+  .arm.close{ animation: armClose 0.55s cubic-bezier(0.34,1.4,0.64,1) forwards; }
+  .arm-left.close{ animation-name: armCloseLeft; }
+  .arm-right.close{ animation-name: armCloseRight; }
+  @keyframes armCloseLeft{
+    0%{ opacity:0; transform: translateX(-60%) rotate(-8deg); }
+    60%{ opacity:1; }
+    100%{ opacity:1; transform: translateX(6%) rotate(0deg); }
+  }
+  @keyframes armCloseRight{
+    0%{ opacity:0; transform: translateX(60%) rotate(8deg); }
+    60%{ opacity:1; }
+    100%{ opacity:1; transform: translateX(-6%) rotate(0deg); }
+  }
+  .anim-layer.fadeout .arm{ animation: armFade 0.6s ease forwards; }
+  @keyframes armFade{
+    0%{ opacity:1; transform: scale(1); }
+    100%{ opacity:0; transform: scale(0.9); }
+  }
+  .heart-particle{
+    position:absolute; left: 50%; top: 42%; font-size: 18px; color: var(--accent-hover);
+    opacity:0; transform: translate(-50%,-50%);
+  }
+  .heart-particle.float{ animation: heartFloat 1.1s ease forwards; }
+  @keyframes heartFloat{
+    0%{ opacity:0; transform: translate(-50%,-50%) scale(0.5); }
+    25%{ opacity:1; transform: translate(calc(-50% + var(--dx)), -60%) scale(1); }
+    100%{ opacity:0; transform: translate(calc(-50% + var(--dx) * 1.6), -160%) scale(0.8); }
+  }
+
+  .modal-overlay{
+    position: fixed; inset:0; background: rgba(91,70,54,0.35);
+    display:flex; align-items:center; justify-content:center; z-index: 50; padding: 20px;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .modal{
+    background: var(--card-bg); color: var(--ink); width: 100%; max-width: 440px;
+    border-radius: 10px; padding: 26px 24px 20px; max-height: 86vh;
+    display:flex; flex-direction: column;
+  }
+  .modal h3{ font-weight: 700; font-size: 19px; margin: 0 0 6px; }
+  .modal p.hint{ margin: 0 0 16px; font-size: 13px; color: var(--ink-dim); line-height: 1.6; }
+  .modal textarea{
+    width: 100%; min-height: 130px; resize: vertical;
+    border: 1px solid rgba(91,70,54,0.2); border-radius: 8px; padding: 12px 14px;
+    font-size: 15px; line-height: 1.6; background: #fff; color: var(--ink);
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .modal textarea:focus{ outline: 2px solid var(--accent-hover); }
+  .modal-footer{ display:flex; align-items:center; justify-content: space-between; margin-top: 12px; }
+  .char-count{ font-size: 12px; color: var(--ink-faint); }
+  .modal-actions{ display:flex; gap: 8px; }
+  .btn-ghost, .btn-primary{
+    border:none; border-radius: 999px; padding: 9px 18px; font-size: 13px; font-weight: 700; cursor:pointer;
+  }
+  .btn-ghost{ background: transparent; color: var(--ink-dim); }
+  .btn-primary{ background: var(--accent); color: var(--accent-text); }
+  .btn-primary:hover{ background: var(--accent-hover); }
+  .btn-primary:disabled{ background: rgba(91,70,54,0.15); color: rgba(91,70,54,0.4); cursor:not-allowed; }
+
+  .detail-note-text{
+    background: var(--bg-soft); border-radius: 8px; padding: 14px 16px; font-size: 14px;
+    line-height: 1.6; white-space: pre-wrap; word-break: break-word; margin: 0 0 14px;
+    max-height: 120px; overflow-y: auto;
+  }
+  .identity-badge{ display:flex; align-items:center; gap: 8px; font-size: 12px; color: var(--ink-dim); margin-bottom: 12px; }
+  .identity-dot{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .identity-badge b{ color: var(--ink); font-weight: 700; }
+
+  .comment-list{
+    flex: 1; overflow-y: auto; display:flex; flex-direction: column; gap: 10px;
+    padding: 10px; margin-bottom: 12px; min-height: 140px;
+    background: rgba(91,70,54,0.03); border-radius: 10px;
+  }
+  .comment-empty{ font-size: 13px; color: var(--ink-faint); text-align: center; padding: 18px 8px; margin: auto; }
+  .chat-msg{ display:flex; flex-direction: column; max-width: 76%; }
+  .chat-msg.me{ align-self: flex-end; align-items: flex-end; }
+  .chat-msg.other{ align-self: flex-start; align-items: flex-start; }
+  .chat-author{ display:flex; align-items:center; gap: 5px; margin-bottom: 3px; font-weight: 700; font-size: 11px; color: var(--ink-dim); }
+  .chat-author .identity-dot{ width: 8px; height: 8px; }
+  .chat-bubble{ padding: 9px 13px; border-radius: 16px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+  .chat-msg.other .chat-bubble{ background: #fff; color: var(--ink); border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(91,70,54,0.1); }
+  .chat-msg.me .chat-bubble{ background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 4px; }
+
+  .comment-input-row{ display:flex; gap: 8px; border-top: 1px solid rgba(91,70,54,0.12); padding-top: 12px; }
+  .comment-input-row input{
+    flex: 1; border: 1px solid rgba(91,70,54,0.2); border-radius: 999px; padding: 10px 14px;
+    font-size: 13px; background: #fff; color: var(--ink); font-family: 'Noto Sans KR', sans-serif;
+  }
+  .comment-input-row input:focus{ outline: 2px solid var(--accent-hover); }
+  .comment-input-row button{
+    border:none; background: var(--accent); color: var(--accent-text); font-weight: 700;
+    font-size: 13px; padding: 0 16px; border-radius: 999px; cursor:pointer; white-space: nowrap;
+  }
+  .comment-input-row button:hover{ background: var(--accent-hover); }
+  .comment-input-row button:disabled{ background: rgba(91,70,54,0.15); color: rgba(91,70,54,0.4); cursor:not-allowed; }
+
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+</style>
+</head>
+<body>
+
+<h2 class="sr-only">허그 클럽: 사람들이 익명으로 사연을 남기고, 허그 버튼과 사연별 익명 채팅으로 서로 위로를 전하는 게시판입니다.</h2>
+
+<div class="topbar">
+  <div class="brand">
+    <h1>허그 클럽</h1>
+    <p>말 못 할 이야기를 조용히 내려놓는 곳</p>
+  </div>
+  <button class="write-btn" id="openWrite">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+    마음 꺼내놓기
+  </button>
+</div>
+
+<div class="board-wrap">
+  <div id="emptyState" class="empty-state" style="display:none;">
+    <h2>아직 아무도 마음을 꺼내놓지 않았어요</h2>
+    <p>여기엔 이름도, 얼굴도 없어요.<br>그냥 하고 싶었던 말을 처음으로 남겨보세요.</p>
+    <button class="write-btn" id="openWriteEmpty" style="margin: 0 auto;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      첫 이야기 남기기
+    </button>
+  </div>
+  <div class="board" id="board"></div>
+</div>
+
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal">
+    <h3>익명으로 마음 남기기</h3>
+    <p class="hint">이름은 남지 않아요. 오늘 있었던 일, 하고 싶었던 말, 무엇이든 괜찮아요.</p>
+    <textarea id="noteInput" maxlength="400" placeholder="오늘 유난히 힘든 일이 있었어..."></textarea>
+    <div class="modal-footer">
+      <span class="char-count"><span id="charCount">0</span>/400</span>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelWrite">취소</button>
+        <button class="btn-primary" id="submitWrite" disabled>익명으로 올리기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="detailOverlay">
+  <div class="modal">
+    <h3>이 사연의 채팅방</h3>
+    <div class="detail-note-text" id="detailNoteText"></div>
+    <div class="identity-badge">
+      <span class="identity-dot" id="myIdentityDot"></span>
+      이 방에서 당신은 <b id="myIdentityName"></b>이에요
+    </div>
+    <div class="comment-list" id="commentList"></div>
+    <div class="comment-input-row">
+      <input type="text" id="commentInput" maxlength="200" placeholder="따뜻한 말 한마디 건네보세요">
+      <button id="submitComment" disabled>보내기</button>
+    </div>
+    <div style="text-align:right; margin-top:10px;">
+      <button class="btn-ghost" id="closeDetail">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1) Firebase 설정 — 반드시 본인 프로젝트 값으로 교체하세요.
+   Firebase 콘솔 > 프로젝트 설정 > 일반 > 내 앱 > SDK 설정에서 복사
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const FieldValue = firebase.firestore.FieldValue;
+
+/* ============================================================ */
+
+const PAPER_COLORS = ['var(--paper-1)','var(--paper-2)','var(--paper-3)','var(--paper-4)'];
+const DOT_COLORS = ['var(--dot-1)','var(--dot-2)','var(--dot-3)','var(--dot-4)','var(--dot-5)','var(--dot-6)'];
+const NAME_ADJ = ['조용한','다정한','씩씩한','포근한','말랑한','느긋한','반짝이는','수줍은','따뜻한','엉뚱한'];
+const NAME_NOUN = ['여우','고양이','구름','파도','나무','별','우산','고래','참새','토끼'];
+
+const board = document.getElementById('board');
+const emptyState = document.getElementById('emptyState');
+
+const modalOverlay = document.getElementById('modalOverlay');
+const noteInput = document.getElementById('noteInput');
+const charCount = document.getElementById('charCount');
+const submitWrite = document.getElementById('submitWrite');
+
+const detailOverlay = document.getElementById('detailOverlay');
+const detailNoteText = document.getElementById('detailNoteText');
+const myIdentityDot = document.getElementById('myIdentityDot');
+const myIdentityName = document.getElementById('myIdentityName');
+const commentList = document.getElementById('commentList');
+const commentInput = document.getElementById('commentInput');
+const submitComment = document.getElementById('submitComment');
+
+let huggedIds = new Set(JSON.parse(localStorage.getItem('hugged-by-me') || '[]'));
+let notesCache = [];
+let activeNote = null;
+let activeIdentity = null;
+let unsubscribeComments = null;
+
+function openWriteModal(){
+  modalOverlay.classList.remove('hidden');
+  noteInput.value = '';
+  charCount.textContent = '0';
+  submitWrite.disabled = true;
+  setTimeout(()=>noteInput.focus(), 50);
+}
+function closeWriteModal(){ modalOverlay.classList.add('hidden'); }
+document.getElementById('openWrite').addEventListener('click', openWriteModal);
+document.getElementById('openWriteEmpty').addEventListener('click', openWriteModal);
+document.getElementById('cancelWrite').addEventListener('click', closeWriteModal);
+modalOverlay.addEventListener('click', (e)=>{ if(e.target === modalOverlay) closeWriteModal(); });
+
+noteInput.addEventListener('input', ()=>{
+  const len = noteInput.value.length;
+  charCount.textContent = len;
+  submitWrite.disabled = len === 0;
+});
+
+function closeDetailModal(){
+  if(unsubscribeComments){ unsubscribeComments(); unsubscribeComments = null; }
+  detailOverlay.classList.add('hidden');
+}
+document.getElementById('closeDetail').addEventListener('click', closeDetailModal);
+detailOverlay.addEventListener('click', (e)=>{ if(e.target === detailOverlay) closeDetailModal(); });
+
+commentInput.addEventListener('input', ()=>{
+  submitComment.disabled = commentInput.value.trim().length === 0;
+});
+
+function renderEmptyState(){
+  emptyState.style.display = notesCache.length === 0 ? 'block' : 'none';
+}
+
+function createNoteEl(note, colorIdx){
+  const wrap = document.createElement('div');
+  wrap.className = 'note';
+  wrap.dataset.id = note.id;
+  const rot = (Math.random() * 5 - 2.5).toFixed(2);
+  const tapeRot = (Math.random() * 8 - 4).toFixed(2);
+  wrap.style.background = PAPER_COLORS[colorIdx % PAPER_COLORS.length];
+  wrap.style.transform = `rotate(${rot}deg)`;
+  wrap.style.setProperty('--tape-rot', tapeRot + 'deg');
+
+  const textEl = document.createElement('p');
+  textEl.className = 'note-text';
+  textEl.textContent = note.text;
+
+  const footer = document.createElement('div');
+  footer.className = 'note-footer';
+
+  const countEl = document.createElement('span');
+  countEl.className = 'hug-count';
+  countEl.textContent = `따뜻함 ${note.hugs || 0}`;
+
+  const actions = document.createElement('div');
+  actions.className = 'note-actions';
+
+  const commentBtn = document.createElement('button');
+  commentBtn.className = 'icon-btn';
+  commentBtn.title = '채팅방 입장';
+  commentBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-4-1L3 20l1-5.5a8.5 8.5 0 0 1-1-4A8.38 8.38 0 0 1 11.5 2a8.5 8.5 0 0 1 9.5 9.5z"/>
+    </svg>
+    <span class="comment-count-label">${note.commentCount || 0}</span>
+  `;
+  commentBtn.addEventListener('click', ()=> openDetail(note));
+
+  const hugBtn = document.createElement('button');
+  const already = huggedIds.has(note.id);
+  hugBtn.className = 'icon-btn' + (already ? ' hugged' : '');
+  hugBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 21s-7-4.6-9.3-9C1.2 8.8 2.6 5 6.2 5c2 0 3.4 1.2 3.8 2 0 0 .4-2 3.8-2 3.6 0 5 3.8 3.5 7-2.3 4.4-9.3 9-9.3 9z"/>
+    </svg>
+    <span class="hug-label">${already ? '안아줬어요' : '허그하기'}</span>
+  `;
+  if(already) hugBtn.disabled = true;
+  hugBtn.addEventListener('click', ()=> handleHug(note, wrap, hugBtn, countEl));
+
+  actions.appendChild(commentBtn);
+  actions.appendChild(hugBtn);
+  footer.appendChild(countEl);
+  footer.appendChild(actions);
+  wrap.appendChild(textEl);
+  wrap.appendChild(footer);
+  return wrap;
+}
+
+async function handleHug(note, cardEl, btnEl, countEl){
+  if(huggedIds.has(note.id)) return;
+  huggedIds.add(note.id);
+  btnEl.disabled = true;
+  btnEl.classList.add('hugged');
+  btnEl.querySelector('.hug-label').textContent = '안아줬어요';
+
+  playHugAnimation(cardEl);
+
+  note.hugs = (note.hugs || 0) + 1;
+  countEl.textContent = `따뜻함 ${note.hugs}`;
+
+  try{
+    await db.collection('notes').doc(note.id).update({ hugs: FieldValue.increment(1) });
+  }catch(e){ console.error('hug save failed', e); }
+
+  localStorage.setItem('hugged-by-me', JSON.stringify(Array.from(huggedIds)));
+}
+
+function playHugAnimation(cardEl){
+  cardEl.style.position = 'relative';
+  const layer = document.createElement('div');
+  layer.className = 'anim-layer';
+
+  const armL = document.createElement('div');
+  armL.className = 'arm arm-left';
+  const armR = document.createElement('div');
+  armR.className = 'arm arm-right';
+  layer.appendChild(armL);
+  layer.appendChild(armR);
+
+  for(let i=0;i<4;i++){
+    const heart = document.createElement('div');
+    heart.className = 'heart-particle';
+    heart.textContent = '♥';
+    heart.style.setProperty('--dx', (Math.random()*60 - 30) + 'px');
+    heart.style.animationDelay = (0.5 + i*0.08) + 's';
+    layer.appendChild(heart);
+  }
+
+  cardEl.appendChild(layer);
+
+  requestAnimationFrame(()=>{
+    armL.classList.add('close');
+    armR.classList.add('close');
+  });
+  setTimeout(()=>{ layer.querySelectorAll('.heart-particle').forEach(h => h.classList.add('float')); }, 500);
+  setTimeout(()=>{ layer.classList.add('fadeout'); }, 1050);
+  setTimeout(()=>{ layer.remove(); }, 1750);
+}
+
+function renderBoard(){
+  board.innerHTML = '';
+  notesCache
+    .slice()
+    .sort((a,b)=> (b.createdAt||0) - (a.createdAt||0))
+    .forEach((note, idx)=>{ board.appendChild(createNoteEl(note, idx)); });
+  renderEmptyState();
+}
+
+async function submitNote(){
+  const text = noteInput.value.trim();
+  if(!text) return;
+  submitWrite.disabled = true;
+  try{
+    await db.collection('notes').add({
+      text: text,
+      createdAt: Date.now(),
+      hugs: 0,
+      commentCount: 0
+    });
+    closeWriteModal();
+  }catch(e){
+    console.error('submit failed', e);
+    submitWrite.disabled = false;
+  }
+}
+submitWrite.addEventListener('click', submitNote);
+
+function randomIdentity(){
+  const adj = NAME_ADJ[Math.floor(Math.random()*NAME_ADJ.length)];
+  const noun = NAME_NOUN[Math.floor(Math.random()*NAME_NOUN.length)];
+  const color = DOT_COLORS[Math.floor(Math.random()*DOT_COLORS.length)];
+  return { name: `${adj} ${noun}`, color };
+}
+
+function getOrCreateIdentity(noteId){
+  const key = `identity:${noteId}`;
+  const saved = localStorage.getItem(key);
+  if(saved) return JSON.parse(saved);
+  const identity = randomIdentity();
+  localStorage.setItem(key, JSON.stringify(identity));
+  return identity;
+}
+
+function renderComments(comments){
+  commentList.innerHTML = '';
+  if(comments.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'comment-empty';
+    empty.textContent = '아직 아무도 없어요. 먼저 말을 걸어보세요.';
+    commentList.appendChild(empty);
+    return;
+  }
+  comments.forEach(c=>{
+    const isMe = activeIdentity && c.name === activeIdentity.name && c.color === activeIdentity.color;
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg ' + (isMe ? 'me' : 'other');
+
+    if(!isMe){
+      const author = document.createElement('div');
+      author.className = 'chat-author';
+      author.innerHTML = `<span class="identity-dot" style="background:${c.color}"></span>${c.name}`;
+      msg.appendChild(author);
+    }
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.textContent = c.text;
+    msg.appendChild(bubble);
+    commentList.appendChild(msg);
+  });
+  commentList.scrollTop = commentList.scrollHeight;
+}
+
+function openDetail(note){
+  activeNote = note;
+  detailNoteText.textContent = note.text;
+  commentInput.value = '';
+  submitComment.disabled = true;
+  commentList.innerHTML = '<div class="comment-empty">불러오는 중...</div>';
+  detailOverlay.classList.remove('hidden');
+
+  activeIdentity = getOrCreateIdentity(note.id);
+  myIdentityDot.style.background = activeIdentity.color;
+  myIdentityName.textContent = `'${activeIdentity.name}'`;
+
+  if(unsubscribeComments) unsubscribeComments();
+  // 진짜 실시간 리스너: 다른 사람이 메시지를 보내면 새로고침 없이 바로 뜸
+  unsubscribeComments = db.collection('notes').doc(note.id).collection('comments')
+    .orderBy('ts')
+    .onSnapshot(snapshot => {
+      const comments = snapshot.docs.map(d => d.data());
+      renderComments(comments);
+    }, err => console.error('comments listener failed', err));
+}
+
+async function submitCommentHandler(){
+  const text = commentInput.value.trim();
+  if(!text || !activeNote || !activeIdentity) return;
+  submitComment.disabled = true;
+
+  try{
+    await db.collection('notes').doc(activeNote.id).collection('comments').add({
+      name: activeIdentity.name,
+      color: activeIdentity.color,
+      text: text,
+      ts: Date.now()
+    });
+    await db.collection('notes').doc(activeNote.id).update({ commentCount: FieldValue.increment(1) });
+    commentInput.value = '';
+  }catch(e){
+    console.error('comment submit failed', e);
+  }
+  submitComment.disabled = commentInput.value.trim().length === 0;
+}
+submitComment.addEventListener('click', submitCommentHandler);
+commentInput.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' && !submitComment.disabled) submitCommentHandler();
+});
+
+// 게시판 실시간 리스너: 누가 사연을 올리거나 허그하면 모두의 화면이 즉시 갱신됨
+db.collection('notes').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+  notesCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderBoard();
+}, err => console.error('notes listener failed', err));
+</script>
+</body>
+</html>

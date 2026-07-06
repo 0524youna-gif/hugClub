@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /notes/{noteId} {
+      allow read: if true;
+
+      // 새 사연 작성: 텍스트 길이 제한, 초기값 검증
+      allow create: if request.resource.data.text is string
+                    && request.resource.data.text.size() > 0
+                    && request.resource.data.text.size() <= 400
+                    && request.resource.data.hugs == 0
+                    && request.resource.data.commentCount == 0;
+
+      // 기존 사연 수정: hugs 또는 commentCount 필드만 증가시키는 것만 허용
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+                      .hasOnly(['hugs', 'commentCount']);
+
+      allow delete: if false;
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if request.resource.data.text is string
+                      && request.resource.data.text.size() > 0
+                      && request.resource.data.text.size() <= 200
+                      && request.resource.data.name is string
+                      && request.resource.data.color is string;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+  }
+}
