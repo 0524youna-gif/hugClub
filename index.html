@@ -918,11 +918,18 @@ function makeDefaultThumb(){
 
 async function signInWithGoogle(){
   try{
-    await auth.signInWithPopup(googleProvider);
-  }catch(e){ console.error('로그인 실패', e); }
+    await auth.signInWithRedirect(googleProvider);
+  }catch(e){
+    console.error('로그인 실패', e);
+    alert('로그인에 실패했어요: ' + (e && e.message ? e.message : e));
+  }
 }
 
 if(canUseFirestore){
+  auth.getRedirectResult().catch(e=>{
+    console.error('리다이렉트 로그인 실패', e);
+    alert('로그인에 실패했어요: ' + (e && e.message ? e.message : e));
+  });
   auth.onAuthStateChanged(async (user)=>{
     currentUser = user;
     myHugIcon = null;
