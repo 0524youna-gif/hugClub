@@ -7,7 +7,11 @@
       "**/.gitignore",
       "**/node_modules/**",
       "database.rules.json",
-      "README.md"
+      "README.md",
+      "firestore.rules"
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }
