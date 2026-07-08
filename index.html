@@ -203,6 +203,16 @@
     0%{ opacity:1; transform: scale(1); }
     100%{ opacity:0; transform: scale(0.9); }
   }
+
+  .arm-img{
+    position:absolute; top: 50%; width: 44%; height: auto; margin-top: -85px;
+    opacity: 0; pointer-events:none;
+  }
+  .arm-img-left{ left: -4%; transform: translateX(-60%) rotate(-8deg); }
+  .arm-img-right{ right: -4%; transform: translateX(60%) rotate(8deg); }
+  .arm-img-left.close{ animation: armCloseLeft 0.55s cubic-bezier(0.34,1.4,0.64,1) forwards; }
+  .arm-img-right.close{ animation: armCloseRight 0.55s cubic-bezier(0.34,1.4,0.64,1) forwards; }
+  .anim-layer.fadeout .arm-img{ animation: armFade 0.9s ease forwards; }
   .heart-particle{
     position:absolute; left: 50%; top: 42%; font-size: 18px; color: var(--accent-hover);
     opacity:0; transform: translate(-50%,-50%);
@@ -306,6 +316,24 @@
   }
   .comment-input-row button:hover{ background: var(--accent-hover); }
   .comment-input-row button:disabled{ background: rgba(91,70,54,0.15); color: rgba(91,70,54,0.4); cursor:not-allowed; }
+
+  .layer-tabs{
+    display:flex;
+    gap: 8px;
+    justify-content:center;
+    margin-bottom: 12px;
+  }
+  .layer-tab{
+    background: transparent;
+    border: 1px solid rgba(91,70,54,0.25);
+    color: var(--ink-dim);
+    font-weight: 700;
+    font-size: 13px;
+    padding: 7px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .layer-tab.active{ background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
   .draw-canvas-wrap{
     display:flex;
@@ -427,7 +455,11 @@
 <div class="modal-overlay hidden" id="iconOverlay">
   <div class="modal">
     <h3>나만의 허그 아이콘</h3>
-    <p class="hint">도안 위에 자유롭게 색칠하거나 그려보세요. 완성하면 이 아이콘으로 사람들을 안아주게 돼요.</p>
+    <p class="hint">몸통(얼굴)이랑 팔을 따로 그려주세요. 허그할 때 팔이 따로 움직이면서 감싸안아요.</p>
+    <div class="layer-tabs">
+      <button class="layer-tab active" id="layerBodyTab" data-layer="body">몸통</button>
+      <button class="layer-tab" id="layerArmsTab" data-layer="arms">팔</button>
+    </div>
     <div class="draw-canvas-wrap">
       <canvas id="iconCanvas" width="220" height="220"></canvas>
     </div>
@@ -522,7 +554,10 @@ let activeNote = null;
 let activeIdentity = null;
 let unsubscribeComments = null;
 let currentUser = null;
-let myHugIcon = null;     // 로그인한 사용자가 저장한 허그 아이콘 (PNG data URL)
+let myHugIcon = null;      // 로그인한 사용자가 저장한 몸통/얼굴 아이콘 (PNG data URL)
+let myArmsIcon = null;     // 저장한 팔 아이콘 원본 (PNG data URL)
+let myArmsLeftIcon = null; // 팔 아이콘을 반으로 잘라둔 왼쪽 (허그 애니메이션용)
+let myArmsRightIcon = null;
 
 function openWriteModal(){
   modalOverlay.classList.remove('hidden');
@@ -628,7 +663,7 @@ async function handleHug(note, cardEl, btnEl, countEl){
   btnEl.classList.add('hugged');
   btnEl.querySelector('.hug-label').textContent = '안아줬어요';
 
-  playHugAnimation(cardEl, myHugIcon);
+  playHugAnimation(cardEl, myHugIcon, myArmsLeftIcon, myArmsRightIcon);
 
   note.hugs = (note.hugs || 0) + 1;
   countEl.textContent = `따뜻함 ${note.hugs}`;
@@ -644,7 +679,7 @@ async function handleHug(note, cardEl, btnEl, countEl){
   localStorage.setItem('hugged-by-me', JSON.stringify(Array.from(huggedIds)));
 }
 
-function playHugAnimation(cardEl, iconUrl){
+function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl){
   cardEl.style.position = 'relative';
   const layer = document.createElement('div');
   layer.className = 'anim-layer';
@@ -654,6 +689,33 @@ function playHugAnimation(cardEl, iconUrl){
     const img = document.createElement('img');
     img.className = 'hug-icon-anim';
     img.src = iconUrl;
+
+    if(armsLeftUrl && armsRightUrl){
+      // 내가 그린 팔 그림을 좌우로 잘라서 감싸안는 모션으로 사용
+      const armL = document.createElement('img');
+      armL.className = 'arm-img arm-img-left';
+      armL.src = armsLeftUrl;
+      const armR = document.createElement('img');
+      armR.className = 'arm-img arm-img-right';
+      armR.src = armsRightUrl;
+      layer.appendChild(armL);
+      layer.appendChild(armR);
+      layer.appendChild(img);
+      cardEl.appendChild(layer);
+
+      requestAnimationFrame(()=>{
+        img.classList.add('pop');
+        armL.classList.add('close');
+        armR.classList.add('close');
+      });
+      setTimeout(()=>{
+        img.classList.add('fadeaway');
+        layer.classList.add('fadeout');
+      }, 2200);
+      setTimeout(()=>{ layer.remove(); }, 3100);
+      return;
+    }
+
     layer.appendChild(img);
     cardEl.appendChild(layer);
 
@@ -929,10 +991,24 @@ if(canUseFirestore){
   auth.onAuthStateChanged(async (user)=>{
     currentUser = user;
     myHugIcon = null;
+    myArmsIcon = null;
+    myArmsLeftIcon = null;
+    myArmsRightIcon = null;
     if(user){
       try{
         const doc = await db.collection('users').doc(user.uid).get();
-        if(doc.exists && doc.data().hugIcon) myHugIcon = doc.data().hugIcon;
+        if(doc.exists){
+          const data = doc.data();
+          if(data.hugIcon) myHugIcon = data.hugIcon;
+          if(data.armsIcon){
+            myArmsIcon = data.armsIcon;
+            try{
+              const split = await splitArmsImage(myArmsIcon);
+              myArmsLeftIcon = split.left;
+              myArmsRightIcon = split.right;
+            }catch(e){ console.error('팔 이미지 분리 실패', e); }
+          }
+        }
       }catch(e){ console.error('내 아이콘 불러오기 실패', e); }
       if(!myHugIcon) openIconModal(); // 첫 로그인이면 바로 그리도록 유도
     }
@@ -942,7 +1018,7 @@ if(canUseFirestore){
   renderAuthArea();
 }
 
-/* ---- 아이콘 그리기 캔버스 ---- */
+/* ---- 아이콘 그리기 캔버스 (몸통/팔 레이어 분리) ---- */
 const iconCtx = iconCanvas.getContext('2d');
 let drawColor = '#e38c9c';
 let drawSize = 9;
@@ -950,29 +1026,71 @@ let isErasing = false;
 let isDrawing = false;
 let lastX = 0, lastY = 0;
 
-function drawGuide(){
-  iconCtx.clearRect(0,0,iconCanvas.width, iconCanvas.height);
-  iconCtx.fillStyle = '#fffdf8';
-  iconCtx.fillRect(0,0,iconCanvas.width, iconCanvas.height);
+let activeLayer = 'body'; // 'body' | 'arms'
+const layerCanvases = {
+  body: Object.assign(document.createElement('canvas'), { width: 220, height: 220 }),
+  arms: Object.assign(document.createElement('canvas'), { width: 220, height: 220 }),
+};
+
+function drawGuideOn(ctx, layer){
+  ctx.clearRect(0,0,220,220);
+  ctx.fillStyle = '#fffdf8';
+  ctx.fillRect(0,0,220,220);
 
   // 살짝 안는 팔 모양의 연한 도안 가이드선
-  iconCtx.save();
-  iconCtx.strokeStyle = 'rgba(91,70,54,0.25)';
-  iconCtx.lineWidth = 3;
-  iconCtx.lineCap = 'round';
+  ctx.save();
+  ctx.strokeStyle = 'rgba(91,70,54,0.25)';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
 
-  iconCtx.beginPath();
-  iconCtx.arc(70, 130, 55, Math.PI*0.15, Math.PI*1.3);
-  iconCtx.stroke();
+  if(layer === 'arms'){
+    ctx.beginPath();
+    ctx.arc(70, 130, 55, Math.PI*0.15, Math.PI*1.3);
+    ctx.stroke();
 
-  iconCtx.beginPath();
-  iconCtx.arc(150, 130, 55, Math.PI*1.7, Math.PI*0.85, true);
-  iconCtx.stroke();
+    ctx.beginPath();
+    ctx.arc(150, 130, 55, Math.PI*1.7, Math.PI*0.85, true);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(110, 95, 26, 0, Math.PI*2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
-  iconCtx.beginPath();
-  iconCtx.arc(110, 95, 26, 0, Math.PI*2);
-  iconCtx.stroke();
-  iconCtx.restore();
+function switchLayer(layer){
+  if(layer === activeLayer) return;
+  // 지금 그리던 내용을 해당 레이어 저장소에 보관
+  const curStore = layerCanvases[activeLayer].getContext('2d');
+  curStore.clearRect(0,0,220,220);
+  curStore.drawImage(iconCanvas, 0, 0);
+
+  activeLayer = layer;
+  iconCtx.clearRect(0,0,220,220);
+  iconCtx.drawImage(layerCanvases[activeLayer], 0, 0);
+
+  document.querySelectorAll('.layer-tab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.layer === activeLayer);
+  });
+}
+document.getElementById('layerBodyTab').addEventListener('click', ()=> switchLayer('body'));
+document.getElementById('layerArmsTab').addEventListener('click', ()=> switchLayer('arms'));
+
+// 팔 그림(220x220)을 절반으로 잘라 허그 애니메이션에서 좌우로 쓸 수 있게 만든다
+function splitArmsImage(armsDataUrl){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const leftC = document.createElement('canvas'); leftC.width = 110; leftC.height = 220;
+      leftC.getContext('2d').drawImage(img, 0, 0, 110, 220, 0, 0, 110, 220);
+      const rightC = document.createElement('canvas'); rightC.width = 110; rightC.height = 220;
+      rightC.getContext('2d').drawImage(img, 110, 0, 110, 220, 0, 0, 110, 220);
+      resolve({ left: leftC.toDataURL('image/png'), right: rightC.toDataURL('image/png') });
+    };
+    img.onerror = reject;
+    img.src = armsDataUrl;
+  });
 }
 
 function setupSwatches(){
@@ -1006,7 +1124,7 @@ eraserBtn.addEventListener('click', ()=>{
   eraserBtn.classList.toggle('active', isErasing);
 });
 
-resetCanvasBtn.addEventListener('click', drawGuide);
+resetCanvasBtn.addEventListener('click', ()=> drawGuideOn(iconCtx, activeLayer));
 
 function getCanvasPos(e){
   const rect = iconCanvas.getBoundingClientRect();
@@ -1044,7 +1162,14 @@ iconCanvas.addEventListener('pointermove', moveDraw);
 window.addEventListener('pointerup', endDraw);
 
 function openIconModal(){
-  drawGuide();
+  activeLayer = 'body';
+  drawGuideOn(layerCanvases.body.getContext('2d'), 'body');
+  drawGuideOn(layerCanvases.arms.getContext('2d'), 'arms');
+  iconCtx.clearRect(0,0,220,220);
+  iconCtx.drawImage(layerCanvases.body, 0, 0);
+  document.querySelectorAll('.layer-tab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.layer === 'body');
+  });
   iconOverlay.classList.remove('hidden');
 }
 cancelIcon.addEventListener('click', ()=> iconOverlay.classList.add('hidden'));
@@ -1052,11 +1177,28 @@ iconOverlay.addEventListener('click', (e)=>{ if(e.target === iconOverlay) iconOv
 
 saveIcon.addEventListener('click', async ()=>{
   if(!currentUser){ iconOverlay.classList.add('hidden'); return; }
-  const dataUrl = iconCanvas.toDataURL('image/png');
+
+  // 지금 보이는 캔버스(활성 레이어)를 저장소에 반영
+  const curStore = layerCanvases[activeLayer].getContext('2d');
+  curStore.clearRect(0,0,220,220);
+  curStore.drawImage(iconCanvas, 0, 0);
+
+  const bodyDataUrl = layerCanvases.body.toDataURL('image/png');
+  const armsDataUrl = layerCanvases.arms.toDataURL('image/png');
+
   saveIcon.disabled = true;
   try{
-    await db.collection('users').doc(currentUser.uid).set({ hugIcon: dataUrl }, { merge: true });
-    myHugIcon = dataUrl;
+    await db.collection('users').doc(currentUser.uid).set({
+      hugIcon: bodyDataUrl,
+      armsIcon: armsDataUrl
+    }, { merge: true });
+    myHugIcon = bodyDataUrl;
+    myArmsIcon = armsDataUrl;
+    try{
+      const split = await splitArmsImage(armsDataUrl);
+      myArmsLeftIcon = split.left;
+      myArmsRightIcon = split.right;
+    }catch(e){ console.error('팔 이미지 분리 실패', e); }
     renderAuthArea();
     iconOverlay.classList.add('hidden');
   }catch(e){
