@@ -203,6 +203,8 @@
   .icon-btn:active{ transform: scale(0.95); }
   .icon-btn.hugged{ background: rgba(91,70,54,0.05); color: rgba(91,70,54,0.5); cursor: default; }
   .icon-btn svg{ width: 15px; height: 15px; }
+  .icon-btn.delete-btn{ padding: 8px; color: rgba(91,70,54,0.5); }
+  .icon-btn.delete-btn:hover{ background: rgba(200,60,60,0.12); color: #b23b3b; }
 
   .anim-layer{ position:absolute; inset:0; pointer-events:none; overflow: visible; border-radius: 3px; }
   .arm{
@@ -588,6 +590,7 @@ const cancelIcon = document.getElementById('cancelIcon');
 const saveIcon = document.getElementById('saveIcon');
 
 let huggedIds = new Set(JSON.parse(localStorage.getItem('hugged-by-me') || '[]'));
+let myNoteIds = new Set(JSON.parse(localStorage.getItem('my-notes') || '[]')); // 이 브라우저에서 내가 쓴 글 (삭제 버튼 노출용)
 let noteOrder = [];       // 정렬된 노트 id 목록 (카드 DOM을 매번 새로 만들지 않기 위함)
 let noteEls = new Map();  // id -> 카드 DOM 엘리먼트
 let activeNote = null;
@@ -689,11 +692,46 @@ function createNoteEl(note, colorIdx){
 
   actions.appendChild(commentBtn);
   actions.appendChild(hugBtn);
+
+  if(myNoteIds.has(note.id)){
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'icon-btn delete-btn';
+    deleteBtn.title = '내 글 삭제하기';
+    deleteBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+      </svg>
+    `;
+    deleteBtn.addEventListener('click', ()=> handleDeleteNote(note, wrap));
+    actions.appendChild(deleteBtn);
+  }
+
   footer.appendChild(countEl);
   footer.appendChild(actions);
   wrap.appendChild(textEl);
   wrap.appendChild(footer);
   return wrap;
+}
+
+async function handleDeleteNote(note, cardEl){
+  if(!confirm('이 이야기를 삭제할까요? 되돌릴 수 없어요.')) return;
+  cardEl.style.pointerEvents = 'none';
+  cardEl.style.opacity = '0.5';
+  try{
+    const commentsSnap = await db.collection('notes').doc(note.id).collection('comments').get();
+    const batch = db.batch();
+    commentsSnap.forEach(d => batch.delete(d.ref));
+    batch.delete(db.collection('notes').doc(note.id));
+    await batch.commit();
+    myNoteIds.delete(note.id);
+    localStorage.setItem('my-notes', JSON.stringify(Array.from(myNoteIds)));
+    // 실제 DOM 제거는 notes 리스너의 'removed' 처리에서 담당
+  }catch(e){
+    console.error('삭제 실패', e);
+    alert('삭제에 실패했어요. 잠시 후 다시 시도해주세요.');
+    cardEl.style.pointerEvents = '';
+    cardEl.style.opacity = '';
+  }
 }
 
 async function handleHug(note, cardEl, btnEl, countEl){
@@ -814,8 +852,13 @@ async function submitNote(){
     return;
   }
 
+  // 실시간 리스너가 카드를 그리기 전에 '내 글' 여부를 먼저 확정해둔다 (삭제 버튼 노출용)
+  const ref = db.collection('notes').doc();
+  myNoteIds.add(ref.id);
+  localStorage.setItem('my-notes', JSON.stringify(Array.from(myNoteIds)));
+
   try{
-    await db.collection('notes').add({
+    await ref.set({
       text: text,
       createdAt: Date.now(),
       hugs: 0,
@@ -824,6 +867,8 @@ async function submitNote(){
     closeWriteModal();
   }catch(e){
     console.error('submit failed', e);
+    myNoteIds.delete(ref.id);
+    localStorage.setItem('my-notes', JSON.stringify(Array.from(myNoteIds)));
     submitWrite.disabled = false;
   }
 }
