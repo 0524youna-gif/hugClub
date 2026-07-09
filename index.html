@@ -1042,10 +1042,49 @@ const layerCanvases = {
   arms: Object.assign(document.createElement('canvas'), { width: 220, height: 220 }),
 };
 
+// 실제로 안아줄 대상(메모 카드)을 맨 밑에 살짝 그려서, 그 위에 도안선을 겹쳐 보여준다.
+// 둘 다 iconGuideCanvas에만 그려지고 저장되는 캔버스에는 안 남는다.
+function drawMemoReference(ctx){
+  const x = 60, y = 106, w = 100, h = 66, fold = 15;
+  ctx.save();
+  ctx.fillStyle = 'rgba(91,70,54,0.06)';
+  ctx.strokeStyle = 'rgba(91,70,54,0.3)';
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w - fold, y);
+  ctx.lineTo(x + w, y + fold);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x, y + h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x + w - fold, y);
+  ctx.lineTo(x + w - fold, y + fold);
+  ctx.lineTo(x + w, y + fold);
+  ctx.closePath();
+  ctx.stroke();
+
+  ctx.lineWidth = 2;
+  [0.36, 0.55, 0.74].forEach((t, i)=>{
+    const ly = y + h * t;
+    ctx.beginPath();
+    ctx.moveTo(x + 12, ly);
+    ctx.lineTo(x + w - 12 - (i === 2 ? 24 : 0), ly);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
 // 그리기 힌트용 도안선. 실제로 저장되는 캔버스에는 안 그려지고,
 // 배경으로만 살짝 비치도록 별도 캔버스(iconGuideCanvas)에만 그린다.
 function drawGuideOverlay(layer){
   iconGuideCtx.clearRect(0,0,220,220);
+  drawMemoReference(iconGuideCtx);
+
   iconGuideCtx.save();
   iconGuideCtx.strokeStyle = 'rgba(91,70,54,0.25)';
   iconGuideCtx.lineWidth = 3;
