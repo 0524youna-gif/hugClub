@@ -207,6 +207,7 @@
   .arm-img{
     position:absolute; top: 50%; width: 44%; height: auto; margin-top: -85px;
     opacity: 0; pointer-events:none;
+    filter: drop-shadow(0 3px 8px rgba(91,70,54,0.25));
   }
   .arm-img-left{ left: -4%; transform: translateX(-60%) rotate(-8deg); }
   .arm-img-right{ right: -4%; transform: translateX(60%) rotate(8deg); }
@@ -225,10 +226,8 @@
     height: 84px;
     margin-left: -42px;
     margin-top: -42px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 6px 16px rgba(91,70,54,0.25);
-    object-fit: cover;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 10px rgba(91,70,54,0.3));
     opacity: 0;
     transform: scale(0.4);
   }
@@ -336,14 +335,22 @@
   .layer-tab.active{ background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
   .draw-canvas-wrap{
-    display:flex;
-    justify-content:center;
-    margin-bottom: 14px;
+    position: relative;
+    width: 220px;
+    height: 220px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background: #fffdf8;
+    box-shadow: 0 4px 14px rgba(91,70,54,0.18);
+  }
+  #iconGuideCanvas{
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
   }
   #iconCanvas{
+    position: absolute; inset: 0;
     border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 4px 14px rgba(91,70,54,0.18);
     touch-action: none;
     cursor: crosshair;
   }
@@ -461,6 +468,7 @@
       <button class="layer-tab" id="layerArmsTab" data-layer="arms">팔</button>
     </div>
     <div class="draw-canvas-wrap">
+      <canvas id="iconGuideCanvas" width="220" height="220"></canvas>
       <canvas id="iconCanvas" width="220" height="220"></canvas>
     </div>
     <div class="draw-toolbar">
@@ -541,6 +549,7 @@ const submitComment = document.getElementById('submitComment');
 const authArea = document.getElementById('authArea');
 const iconOverlay = document.getElementById('iconOverlay');
 const iconCanvas = document.getElementById('iconCanvas');
+const iconGuideCanvas = document.getElementById('iconGuideCanvas');
 const swatchRow = document.getElementById('swatchRow');
 const eraserBtn = document.getElementById('eraserBtn');
 const resetCanvasBtn = document.getElementById('resetCanvasBtn');
@@ -1018,8 +1027,9 @@ if(canUseFirestore){
   renderAuthArea();
 }
 
-/* ---- 아이콘 그리기 캔버스 (몸통/팔 레이어 분리) ---- */
+/* ---- 아이콘 그리기 캔버스 (몸통/팔 레이어 분리, 배경 투명) ---- */
 const iconCtx = iconCanvas.getContext('2d');
+const iconGuideCtx = iconGuideCanvas.getContext('2d');
 let drawColor = '#e38c9c';
 let drawSize = 9;
 let isErasing = false;
@@ -1032,31 +1042,29 @@ const layerCanvases = {
   arms: Object.assign(document.createElement('canvas'), { width: 220, height: 220 }),
 };
 
-function drawGuideOn(ctx, layer){
-  ctx.clearRect(0,0,220,220);
-  ctx.fillStyle = '#fffdf8';
-  ctx.fillRect(0,0,220,220);
-
-  // 살짝 안는 팔 모양의 연한 도안 가이드선
-  ctx.save();
-  ctx.strokeStyle = 'rgba(91,70,54,0.25)';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
+// 그리기 힌트용 도안선. 실제로 저장되는 캔버스에는 안 그려지고,
+// 배경으로만 살짝 비치도록 별도 캔버스(iconGuideCanvas)에만 그린다.
+function drawGuideOverlay(layer){
+  iconGuideCtx.clearRect(0,0,220,220);
+  iconGuideCtx.save();
+  iconGuideCtx.strokeStyle = 'rgba(91,70,54,0.25)';
+  iconGuideCtx.lineWidth = 3;
+  iconGuideCtx.lineCap = 'round';
 
   if(layer === 'arms'){
-    ctx.beginPath();
-    ctx.arc(70, 130, 55, Math.PI*0.15, Math.PI*1.3);
-    ctx.stroke();
+    iconGuideCtx.beginPath();
+    iconGuideCtx.arc(70, 130, 55, Math.PI*0.15, Math.PI*1.3);
+    iconGuideCtx.stroke();
 
-    ctx.beginPath();
-    ctx.arc(150, 130, 55, Math.PI*1.7, Math.PI*0.85, true);
-    ctx.stroke();
+    iconGuideCtx.beginPath();
+    iconGuideCtx.arc(150, 130, 55, Math.PI*1.7, Math.PI*0.85, true);
+    iconGuideCtx.stroke();
   } else {
-    ctx.beginPath();
-    ctx.arc(110, 95, 26, 0, Math.PI*2);
-    ctx.stroke();
+    iconGuideCtx.beginPath();
+    iconGuideCtx.arc(110, 95, 26, 0, Math.PI*2);
+    iconGuideCtx.stroke();
   }
-  ctx.restore();
+  iconGuideCtx.restore();
 }
 
 function switchLayer(layer){
@@ -1069,6 +1077,7 @@ function switchLayer(layer){
   activeLayer = layer;
   iconCtx.clearRect(0,0,220,220);
   iconCtx.drawImage(layerCanvases[activeLayer], 0, 0);
+  drawGuideOverlay(activeLayer);
 
   document.querySelectorAll('.layer-tab').forEach(t=>{
     t.classList.toggle('active', t.dataset.layer === activeLayer);
@@ -1124,7 +1133,7 @@ eraserBtn.addEventListener('click', ()=>{
   eraserBtn.classList.toggle('active', isErasing);
 });
 
-resetCanvasBtn.addEventListener('click', ()=> drawGuideOn(iconCtx, activeLayer));
+resetCanvasBtn.addEventListener('click', ()=> iconCtx.clearRect(0,0,220,220));
 
 function getCanvasPos(e){
   const rect = iconCanvas.getBoundingClientRect();
@@ -1145,7 +1154,8 @@ function moveDraw(e){
   if(!isDrawing) return;
   e.preventDefault();
   const p = getCanvasPos(e);
-  iconCtx.strokeStyle = isErasing ? '#fffdf8' : drawColor;
+  iconCtx.globalCompositeOperation = isErasing ? 'destination-out' : 'source-over';
+  iconCtx.strokeStyle = drawColor;
   iconCtx.lineWidth = isErasing ? drawSize * 2.2 : drawSize;
   iconCtx.lineCap = 'round';
   iconCtx.lineJoin = 'round';
@@ -1163,10 +1173,10 @@ window.addEventListener('pointerup', endDraw);
 
 function openIconModal(){
   activeLayer = 'body';
-  drawGuideOn(layerCanvases.body.getContext('2d'), 'body');
-  drawGuideOn(layerCanvases.arms.getContext('2d'), 'arms');
+  layerCanvases.body.getContext('2d').clearRect(0,0,220,220);
+  layerCanvases.arms.getContext('2d').clearRect(0,0,220,220);
   iconCtx.clearRect(0,0,220,220);
-  iconCtx.drawImage(layerCanvases.body, 0, 0);
+  drawGuideOverlay('body');
   document.querySelectorAll('.layer-tab').forEach(t=>{
     t.classList.toggle('active', t.dataset.layer === 'body');
   });
