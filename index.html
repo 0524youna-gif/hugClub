@@ -96,26 +96,52 @@
     gap: 6px;
   }
   .auth-btn:hover{ background: rgba(91,70,54,0.06); }
-  .user-chip{
+  .user-chip{ position: relative; }
+  .profile-trigger{
     display:flex;
     align-items:center;
-    gap: 8px;
+    gap: 6px;
     background: rgba(91,70,54,0.06);
-    padding: 6px 6px 6px 12px;
+    border: none;
+    padding: 4px 10px 4px 4px;
     border-radius: 999px;
+    cursor: pointer;
   }
-  .user-chip img{ width: 26px; height: 26px; border-radius: 50%; }
-  .user-chip .my-icon-thumb{
+  .profile-trigger:hover{ background: rgba(91,70,54,0.1); }
+  .profile-trigger .my-icon-thumb{
     width: 26px; height: 26px; border-radius: 50%;
     border: 2px solid var(--accent);
     object-fit: cover;
     background: #fff;
+  }
+  .profile-trigger .chevron{ width: 11px; height: 11px; color: var(--ink-dim); }
+  .profile-menu{
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--card-bg);
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(91,70,54,0.22);
+    padding: 6px;
+    min-width: 150px;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .profile-menu.hidden{ display:none; }
+  .profile-menu-item{
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
     cursor: pointer;
   }
-  .user-chip .signout-btn{
-    background:none; border:none; color: var(--ink-dim); font-size: 12px; cursor:pointer;
-    padding: 4px 8px;
-  }
+  .profile-menu-item:hover{ background: rgba(91,70,54,0.08); }
 
   .board-wrap{ padding: 8px 24px 80px; max-width: 1180px; margin: 0 auto; }
   .board{ columns: 4 260px; column-gap: 20px; }
@@ -521,6 +547,16 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="settingsOverlay">
+  <div class="modal">
+    <h3>설정</h3>
+    <div class="modal-footer" style="justify-content: space-between; margin-top: 4px;">
+      <button class="btn-ghost" id="closeSettings">닫기</button>
+      <button class="btn-primary" id="signOutBtn">로그아웃</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    1) Firebase 설정 — 반드시 본인 프로젝트 값으로 교체하세요.
@@ -581,6 +617,7 @@ const submitComment = document.getElementById('submitComment');
 
 const authArea = document.getElementById('authArea');
 const iconOverlay = document.getElementById('iconOverlay');
+const settingsOverlay = document.getElementById('settingsOverlay');
 const iconCanvas = document.getElementById('iconCanvas');
 const iconGuideCanvas = document.getElementById('iconGuideCanvas');
 const swatchRow = document.getElementById('swatchRow');
@@ -1058,21 +1095,51 @@ function renderAuthArea(){
   const chip = document.createElement('div');
   chip.className = 'user-chip';
 
-  const iconThumb = document.createElement('img');
-  iconThumb.className = 'my-icon-thumb';
-  iconThumb.src = myHugIcon || makeDefaultThumb();
-  iconThumb.title = '내 허그 아이콘 만들기/수정하기';
-  iconThumb.addEventListener('click', openIconModal);
+  const trigger = document.createElement('button');
+  trigger.className = 'profile-trigger';
+  trigger.innerHTML = `
+    <img class="my-icon-thumb" src="${myHugIcon || makeDefaultThumb()}" alt="">
+    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+  `;
 
-  const signOutBtn = document.createElement('button');
-  signOutBtn.className = 'signout-btn';
-  signOutBtn.textContent = '로그아웃';
-  signOutBtn.addEventListener('click', ()=> auth.signOut());
+  const menu = document.createElement('div');
+  menu.className = 'profile-menu hidden';
 
-  chip.appendChild(iconThumb);
-  chip.appendChild(signOutBtn);
+  const editIconItem = document.createElement('button');
+  editIconItem.className = 'profile-menu-item';
+  editIconItem.textContent = '아이콘 편집';
+  editIconItem.addEventListener('click', ()=>{
+    menu.classList.add('hidden');
+    openIconModal();
+  });
+
+  const settingsItem = document.createElement('button');
+  settingsItem.className = 'profile-menu-item';
+  settingsItem.textContent = '설정';
+  settingsItem.addEventListener('click', ()=>{
+    menu.classList.add('hidden');
+    settingsOverlay.classList.remove('hidden');
+  });
+
+  menu.appendChild(editIconItem);
+  menu.appendChild(settingsItem);
+
+  trigger.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    menu.classList.toggle('hidden');
+  });
+
+  chip.appendChild(trigger);
+  chip.appendChild(menu);
   authArea.appendChild(chip);
 }
+
+document.addEventListener('click', (e)=>{
+  const menu = authArea.querySelector('.profile-menu');
+  if(menu && !menu.classList.contains('hidden') && !authArea.contains(e.target)){
+    menu.classList.add('hidden');
+  }
+});
 
 function makeDefaultThumb(){
   // 아직 아이콘을 안 그렸을 때 보여줄 기본 원형 플레이스홀더
@@ -1325,6 +1392,13 @@ function openIconModal(){
 }
 cancelIcon.addEventListener('click', ()=> iconOverlay.classList.add('hidden'));
 iconOverlay.addEventListener('click', (e)=>{ if(e.target === iconOverlay) iconOverlay.classList.add('hidden'); });
+
+document.getElementById('closeSettings').addEventListener('click', ()=> settingsOverlay.classList.add('hidden'));
+document.getElementById('signOutBtn').addEventListener('click', ()=>{
+  settingsOverlay.classList.add('hidden');
+  auth.signOut();
+});
+settingsOverlay.addEventListener('click', (e)=>{ if(e.target === settingsOverlay) settingsOverlay.classList.add('hidden'); });
 
 saveIcon.addEventListener('click', async ()=>{
   if(!currentUser){ iconOverlay.classList.add('hidden'); return; }
