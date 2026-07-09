@@ -999,6 +999,69 @@ document.addEventListener('click', (e)=>{
   }
 });
 
+
+/* ============================================================
+   채팅방 목록: 내가 메시지를 보낸 글들을 채팅방처럼 모아 보여준다.
+   ============================================================ */
+const chatListBtn = document.getElementById('chatListBtn');
+const chatListPanel = document.getElementById('chatListPanel');
+
+async function renderChatList(){
+  if(myChatIds.length === 0){
+    chatListPanel.innerHTML = '<div class="notif-empty">아직 대화한 채팅방이 없어요.</div>';
+    return;
+  }
+  chatListPanel.innerHTML = '<div class="notif-empty">불러오는 중...</div>';
+
+  const results = await Promise.all(myChatIds.map(async id=>{
+    try{
+      const doc = await db.collection('notes').doc(id).get();
+      return doc.exists ? { id, text: doc.data().text || '' } : null;
+    }catch(e){ return null; }
+  }));
+  const alive = results.filter(Boolean);
+
+  // 그 사이 삭제된 글은 목록에서 정리
+  if(alive.length !== myChatIds.length){
+    myChatIds = alive.map(n => n.id);
+    localStorage.setItem('my-chats', JSON.stringify(myChatIds));
+  }
+
+  chatListPanel.innerHTML = '';
+  if(alive.length === 0){
+    chatListPanel.innerHTML = '<div class="notif-empty">아직 대화한 채팅방이 없어요.</div>';
+    return;
+  }
+
+  alive.forEach(note=>{
+    const identity = getOrCreateIdentity(note.id);
+    const snippet = note.text.length > 26 ? note.text.slice(0, 26) + '…' : note.text;
+
+    const item = document.createElement('button');
+    item.className = 'chat-list-item';
+    item.innerHTML = `
+      <span class="identity-dot" style="background:${identity.color}"></span>
+      <span class="chat-list-text">${snippet}</span>
+    `;
+    item.addEventListener('click', ()=>{
+      chatListPanel.classList.add('hidden');
+      openDetail(note);
+    });
+    chatListPanel.appendChild(item);
+  });
+}
+
+chatListBtn.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  const willOpen = chatListPanel.classList.contains('hidden');
+  chatListPanel.classList.toggle('hidden');
+  if(willOpen) renderChatList();
+});
+document.addEventListener('click', (e)=>{
+  if(!chatListPanel.classList.contains('hidden') && !chatListPanel.contains(e.target) && !chatListBtn.contains(e.target)){
+    chatListPanel.classList.add('hidden');
+  }
+});
 async function handleDeleteNote(note, cardEl){
   if(!confirm('이 이야기를 삭제할까요? 되돌릴 수 없어요.')) return;
   cardEl.style.pointerEvents = 'none';
