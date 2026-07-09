@@ -193,6 +193,24 @@
     cursor: pointer;
   }
 
+  .chat-list-item{
+    width: 100%;
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 10px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .chat-list-item:hover{ background: rgba(91,70,54,0.08); }
+  .chat-list-item + .chat-list-item{ border-top: 1px solid rgba(91,70,54,0.1); }
+  .chat-list-text{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
   .board-wrap{ padding: 8px 24px 80px; max-width: 1180px; margin: 0 auto; }
   .board{ columns: 4 260px; column-gap: 20px; }
   @media (max-width: 700px){ .board{ columns: 1 260px; } }
@@ -506,13 +524,21 @@
 <div class="topbar">
   <div class="brand">
     <h1>허그 클럽</h1>
-    <p>말 못 할 이야기를 조용히 내려놓는 곳</p>
+    <p>오세요 허그클럽. 상처받은 당신을 안아드립니다. (* 주의사항) </p>
   </div>
   <div class="topbar-actions">
     <button class="write-btn" id="openWrite">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       마음 꺼내놓기
     </button>
+    <div class="notif-wrap">
+      <button class="notif-bell" id="chatListBtn" title="참여중인 채팅">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-4-1L3 20l1-5.5a8.5 8.5 0 0 1-1-4A8.38 8.38 0 0 1 11.5 2a8.5 8.5 0 0 1 9.5 9.5z"/></svg>
+      </button>
+      <div class="notif-panel hidden" id="chatListPanel">
+        <div class="notif-empty">아직 대화한 채팅방이 없어요.</div>
+      </div>
+    </div>
     <div class="notif-wrap">
       <button class="notif-bell" id="notifBell">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -530,7 +556,7 @@
   <div class="announcement" id="announcementCard">
     <span class="announcement-pin">📌 공지</span>
     <!-- 공지 내용은 이 p 태그 안 텍스트만 바꾸면 됩니다 -->
-    <p class="announcement-text">허그 클럽에 오신 걸 환영해요! 여기선 어떤 이야기든 편하게 남겨도 괜찮아요. 서로 다정하게 안아주세요 🤍</p>
+    <p class="announcement-text">허그 클럽에 오신 걸 환영합니다.  🤍</p>
   </div>
   <div id="emptyState" class="empty-state" style="display:none;">
     <h2>아직 아무도 마음을 꺼내놓지 않았어요</h2>
@@ -689,6 +715,15 @@ let huggedIds = new Set(JSON.parse(localStorage.getItem('hugged-by-me') || '[]')
 let myNoteIds = new Set(JSON.parse(localStorage.getItem('my-notes') || '[]')); // 이 브라우저에서 내가 쓴 글 (삭제 버튼 노출용)
 if(canUseFirestore){
   myNoteIds.forEach(id => watchHugsForNote(id)); // 내가 쓴 글에 새 허그가 들어오면 알림 받기
+}
+
+// 내가 메시지를 보낸 채팅방(글) 목록. 배열 맨 앞이 가장 최근에 대화한 방.
+let myChatIds = JSON.parse(localStorage.getItem('my-chats') || '[]');
+function touchMyChat(noteId){
+  const idx = myChatIds.indexOf(noteId);
+  if(idx !== -1) myChatIds.splice(idx, 1);
+  myChatIds.unshift(noteId);
+  localStorage.setItem('my-chats', JSON.stringify(myChatIds));
 }
 let noteOrder = [];       // 정렬된 노트 id 목록 (카드 DOM을 매번 새로 만들지 않기 위함)
 let noteEls = new Map();  // id -> 카드 DOM 엘리먼트
@@ -963,6 +998,69 @@ document.addEventListener('click', (e)=>{
   }
 });
 
+/* ============================================================
+   채팅방 목록: 내가 메시지를 보낸 글들을 채팅방처럼 모아 보여준다.
+   ============================================================ */
+const chatListBtn = document.getElementById('chatListBtn');
+const chatListPanel = document.getElementById('chatListPanel');
+
+async function renderChatList(){
+  if(myChatIds.length === 0){
+    chatListPanel.innerHTML = '<div class="notif-empty">아직 대화한 채팅방이 없어요.</div>';
+    return;
+  }
+  chatListPanel.innerHTML = '<div class="notif-empty">불러오는 중...</div>';
+
+  const results = await Promise.all(myChatIds.map(async id=>{
+    try{
+      const doc = await db.collection('notes').doc(id).get();
+      return doc.exists ? { id, text: doc.data().text || '' } : null;
+    }catch(e){ return null; }
+  }));
+  const alive = results.filter(Boolean);
+
+  // 그 사이 삭제된 글은 목록에서 정리
+  if(alive.length !== myChatIds.length){
+    myChatIds = alive.map(n => n.id);
+    localStorage.setItem('my-chats', JSON.stringify(myChatIds));
+  }
+
+  chatListPanel.innerHTML = '';
+  if(alive.length === 0){
+    chatListPanel.innerHTML = '<div class="notif-empty">아직 대화한 채팅방이 없어요.</div>';
+    return;
+  }
+
+  alive.forEach(note=>{
+    const identity = getOrCreateIdentity(note.id);
+    const snippet = note.text.length > 26 ? note.text.slice(0, 26) + '…' : note.text;
+
+    const item = document.createElement('button');
+    item.className = 'chat-list-item';
+    item.innerHTML = `
+      <span class="identity-dot" style="background:${identity.color}"></span>
+      <span class="chat-list-text">${snippet}</span>
+    `;
+    item.addEventListener('click', ()=>{
+      chatListPanel.classList.add('hidden');
+      openDetail(note);
+    });
+    chatListPanel.appendChild(item);
+  });
+}
+
+chatListBtn.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  const willOpen = chatListPanel.classList.contains('hidden');
+  chatListPanel.classList.toggle('hidden');
+  if(willOpen) renderChatList();
+});
+document.addEventListener('click', (e)=>{
+  if(!chatListPanel.classList.contains('hidden') && !chatListPanel.contains(e.target) && !chatListBtn.contains(e.target)){
+    chatListPanel.classList.add('hidden');
+  }
+});
+
 async function handleDeleteNote(note, cardEl){
   if(!confirm('이 이야기를 삭제할까요? 되돌릴 수 없어요.')) return;
   cardEl.style.pointerEvents = 'none';
@@ -1230,6 +1328,7 @@ async function submitCommentHandler(){
       ts: Date.now()
     });
     await db.collection('notes').doc(activeNote.id).update({ commentCount: FieldValue.increment(1) });
+    touchMyChat(activeNote.id);
     commentInput.value = '';
   }catch(e){
     console.error('comment submit failed', e);
