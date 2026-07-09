@@ -125,6 +125,32 @@
   .empty-state h2{ font-weight: 700; font-size: 21px; color: var(--ink); margin: 0 0 10px; }
   .empty-state p{ margin: 0 0 20px; font-size: 14px; line-height:1.7; }
 
+  .announcement{
+    max-width: 320px;
+    margin: 0 0 24px;
+    padding: 18px 20px;
+    border-radius: 8px;
+    background: var(--paper-3);
+    box-shadow: 0 8px 18px rgba(91,70,54,0.14);
+  }
+  .announcement-pin{
+    display:inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-text);
+    background: var(--accent);
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 10px;
+  }
+  .announcement-text{
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+
   .note{
     break-inside: avoid;
     margin: 0 0 22px;
@@ -414,6 +440,11 @@
 </div>
 
 <div class="board-wrap">
+  <div class="announcement" id="announcementCard">
+    <span class="announcement-pin">📌 공지</span>
+    <!-- 공지 내용은 이 p 태그 안 텍스트만 바꾸면 됩니다 -->
+    <p class="announcement-text">허그 클럽에 오신 걸 환영해요! 여기선 어떤 이야기든 편하게 남겨도 괜찮아요. 서로 다정하게 안아주세요 🤍</p>
+  </div>
   <div id="emptyState" class="empty-state" style="display:none;">
     <h2>아직 아무도 마음을 꺼내놓지 않았어요</h2>
     <p>여기엔 이름도, 얼굴도 없어요.<br>그냥 하고 싶었던 말을 남겨보세요.</p>
