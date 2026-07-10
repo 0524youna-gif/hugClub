@@ -276,7 +276,36 @@
   }
   .note-footer{ display:flex; align-items:center; justify-content: space-between; gap: 8px; }
   .hug-count{ font-size: 12px; color: rgba(91,70,54,0.6); font-weight: 500; }
-  .note-actions{ display:flex; align-items:center; gap: 6px; }
+  .note-actions{ position: relative; display:flex; align-items:center; gap: 6px; }
+
+  .hug-picker{
+    position:absolute;
+    bottom: calc(100% + 10px);
+    right: 0;
+    display:flex;
+    gap: 6px;
+    background: var(--card-bg);
+    padding: 8px;
+    border-radius: 999px;
+    box-shadow: 0 8px 20px rgba(91,70,54,0.22);
+    z-index: 25;
+    animation: hugPickerPop 0.18s ease;
+  }
+  @keyframes hugPickerPop{
+    0%{ opacity:0; transform: translateY(6px) scale(0.9); }
+    100%{ opacity:1; transform: translateY(0) scale(1); }
+  }
+  .hug-picker-avatar{
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    padding: 0;
+    background: #fff;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .hug-picker-avatar img{ width:100%; height:100%; object-fit: cover; display:block; }
+  .hug-picker-avatar:hover{ transform: scale(1.08); }
   .icon-btn{
     position: relative;
     border: none;
@@ -455,6 +484,24 @@
     cursor: pointer;
   }
   .layer-tab.active{ background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+  .preset-grid{
+    display:flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 4px 2px 18px;
+  }
+  .preset-grid-item{
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    padding: 0;
+    background: rgba(91,70,54,0.06);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .preset-grid-item img{ width:100%; height:100%; object-fit: cover; display:block; }
+  .preset-grid-item.selected{ border-color: var(--accent); }
 
   .draw-canvas-wrap{
     position: relative;
@@ -642,6 +689,18 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="presetOverlay">
+  <div class="modal">
+    <h3>아이콘 프리셋 관리</h3>
+    <p class="hint">허그할 때 바로 골라 쓸 아이콘이에요. 최대 5개까지 고를 수 있어요.</p>
+    <div class="preset-grid" id="presetGrid"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="closePresetManager">닫기</button>
+      <button class="btn-primary" id="savePresets">저장</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    1) Firebase 설정 — 반드시 본인 프로젝트 값으로 교체하세요.
@@ -728,10 +787,16 @@ let activeNote = null;
 let activeIdentity = null;
 let unsubscribeComments = null;
 let currentUser = null;
-let myHugIcon = null;      // 로그인한 사용자가 저장한 몸통/얼굴 아이콘 (PNG data URL)
-let myArmsIcon = null;     // 저장한 팔 아이콘 원본 (PNG data URL)
-let myArmsLeftIcon = null; // 팔 아이콘을 반으로 잘라둔 왼쪽 (허그 애니메이션용)
-let myArmsRightIcon = null;
+let myIcons = [];     // 내가 그려서 저장한 모든 아이콘 [{id, hugIcon, armsIcon, createdAt}]
+let myPresetIds = []; // 허그할 때 바로 고를 수 있는 프리셋 (최대 5개, myIcons 중 일부의 id)
+
+function getPrimaryIcon(){
+  if(myPresetIds.length){
+    const found = myIcons.find(i => i.id === myPresetIds[0]);
+    if(found) return found;
+  }
+  return myIcons.length ? myIcons[myIcons.length - 1] : null; // 프리셋 없으면 가장 최근에 그린 아이콘
+}
 
 function openWriteModal(){
   modalOverlay.classList.remove('hidden');
@@ -819,7 +884,7 @@ function createNoteEl(note, colorIdx){
     <span class="hug-label">${already ? '안아줬어요' : '허그하기'}</span>
   `;
   if(already) hugBtn.disabled = true;
-  hugBtn.addEventListener('click', ()=> handleHug(note, wrap, hugBtn, countEl));
+  hugBtn.addEventListener('click', ()=> onHugButtonClick(note, wrap, hugBtn, countEl));
 
   actions.appendChild(commentBtn);
   actions.appendChild(hugBtn);
@@ -886,14 +951,16 @@ if(canUseFirestore){
   myNoteIds.forEach(id => watchHugsForNote(id)); // 내가 쓴 글에 새 허그가 들어오면 알림 받기
 }
 
-async function fetchUserIcon(uid){
+// uid -> 그 사람이 저장한 아이콘 모음 전체 [{id, hugIcon, armsIcon}]
+async function fetchUserIcons(uid){
   if(userIconCache.has(uid)) return userIconCache.get(uid);
-  let result = null;
+  let result = [];
   try{
     const doc = await db.collection('users').doc(uid).get();
     if(doc.exists){
       const data = doc.data();
-      result = { hugIcon: data.hugIcon || null, armsIcon: data.armsIcon || null };
+      if(Array.isArray(data.icons)) result = data.icons;
+      else if(data.hugIcon) result = [{ id: 'legacy', hugIcon: data.hugIcon, armsIcon: data.armsIcon || null }];
     }
   }catch(e){ console.error('허그한 사람 아이콘 조회 실패', e); }
   userIconCache.set(uid, result);
@@ -920,15 +987,13 @@ function unwatchHugsForNote(noteId){
 
 async function handleIncomingHug(noteId, hugData){
   let icon = null;
-  if(hugData.uid) icon = await fetchUserIcon(hugData.uid);
-
-  let armsLeft = null, armsRight = null;
-  if(icon && icon.armsIcon){
-    try{
-      const split = await splitArmsImage(icon.armsIcon);
-      armsLeft = split.left; armsRight = split.right;
-    }catch(e){ console.error('알림용 팔 이미지 분리 실패', e); }
+  if(hugData.uid){
+    const icons = await fetchUserIcons(hugData.uid);
+    icon = icons.find(i => i.id === hugData.iconId) || null;
   }
+
+  const armsSplit = await getIconArmsSplit(icon);
+  const armsLeft = armsSplit.left, armsRight = armsSplit.right;
 
   let entry = notifications.find(n => n.noteId === noteId);
   if(!entry){
@@ -1089,14 +1154,69 @@ async function handleDeleteNote(note, cardEl){
   }
 }
 
-async function handleHug(note, cardEl, btnEl, countEl){
+// 팔 이미지 좌우 분리 결과 캐시 (아이콘 id -> {left, right}). 내 아이콘/다른 사람 아이콘 공용.
+const iconArmsSplitCache = new Map();
+async function getIconArmsSplit(icon){
+  if(!icon || !icon.armsIcon) return { left: null, right: null };
+  if(iconArmsSplitCache.has(icon.id)) return iconArmsSplitCache.get(icon.id);
+  try{
+    const split = await splitArmsImage(icon.armsIcon);
+    iconArmsSplitCache.set(icon.id, split);
+    return split;
+  }catch(e){
+    console.error('팔 이미지 분리 실패', e);
+    return { left: null, right: null };
+  }
+}
+
+let closeOpenHugPicker = null; // 지금 열려있는 허그 프리셋 피커를 닫는 함수
+
+// 허그 버튼을 누르면, 프리셋이 있으면 골라서 안아주고 없으면 바로 안아준다 (비리얼 반응 방식)
+async function onHugButtonClick(note, cardEl, btnEl, countEl){
+  if(huggedIds.has(note.id) || btnEl.disabled) return;
+  if(closeOpenHugPicker){ closeOpenHugPicker(); closeOpenHugPicker = null; }
+
+  const presets = myPresetIds.map(id => myIcons.find(i => i.id === id)).filter(Boolean);
+  if(!currentUser || presets.length === 0){
+    handleHug(note, cardEl, btnEl, countEl, null);
+    return;
+  }
+
+  const actionsEl = btnEl.closest('.note-actions');
+  const picker = document.createElement('div');
+  picker.className = 'hug-picker';
+  presets.forEach(icon=>{
+    const av = document.createElement('button');
+    av.className = 'hug-picker-avatar';
+    av.innerHTML = `<img src="${icon.hugIcon}" alt="">`;
+    av.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      picker.remove();
+      closeOpenHugPicker = null;
+      handleHug(note, cardEl, btnEl, countEl, icon);
+    });
+    picker.appendChild(av);
+  });
+  actionsEl.appendChild(picker);
+
+  const closePicker = ()=>{
+    picker.remove();
+    document.removeEventListener('click', outsideClick);
+  };
+  const outsideClick = (ev)=>{ if(!picker.contains(ev.target) && ev.target !== btnEl) closePicker(); };
+  setTimeout(()=> document.addEventListener('click', outsideClick), 0);
+  closeOpenHugPicker = closePicker;
+}
+
+async function handleHug(note, cardEl, btnEl, countEl, chosenIcon){
   if(huggedIds.has(note.id)) return;
   huggedIds.add(note.id);
   btnEl.disabled = true;
   btnEl.classList.add('hugged');
   btnEl.querySelector('.hug-label').textContent = '안아줬어요';
 
-  playHugAnimation(cardEl, myHugIcon, myArmsLeftIcon, myArmsRightIcon);
+  const armsSplit = await getIconArmsSplit(chosenIcon);
+  playHugAnimation(cardEl, chosenIcon ? chosenIcon.hugIcon : null, armsSplit.left, armsSplit.right);
 
   note.hugs = (note.hugs || 0) + 1;
   countEl.textContent = `따뜻함 ${note.hugs}`;
@@ -1108,6 +1228,7 @@ async function handleHug(note, cardEl, btnEl, countEl){
       batch.update(noteRef, { hugs: FieldValue.increment(1) });
       batch.set(noteRef.collection('hugs').doc(), {
         uid: currentUser ? currentUser.uid : null,
+        iconId: chosenIcon ? chosenIcon.id : null,
         ts: Date.now()
       });
       await batch.commit();
@@ -1398,22 +1519,31 @@ function renderAuthArea(){
   const chip = document.createElement('div');
   chip.className = 'user-chip';
 
+  const primaryIcon = getPrimaryIcon();
   const trigger = document.createElement('button');
   trigger.className = 'profile-trigger';
   trigger.innerHTML = `
-    <img class="my-icon-thumb" src="${myHugIcon || makeDefaultThumb()}" alt="">
+    <img class="my-icon-thumb" src="${(primaryIcon && primaryIcon.hugIcon) || makeDefaultThumb()}" alt="">
     <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
   `;
 
   const menu = document.createElement('div');
   menu.className = 'profile-menu hidden';
 
-  const editIconItem = document.createElement('button');
-  editIconItem.className = 'profile-menu-item';
-  editIconItem.textContent = '아이콘 편집';
-  editIconItem.addEventListener('click', ()=>{
+  const addIconItem = document.createElement('button');
+  addIconItem.className = 'profile-menu-item';
+  addIconItem.textContent = '아이콘 추가';
+  addIconItem.addEventListener('click', ()=>{
     menu.classList.add('hidden');
     openIconModal();
+  });
+
+  const presetsItem = document.createElement('button');
+  presetsItem.className = 'profile-menu-item';
+  presetsItem.textContent = '아이콘 프리셋 관리';
+  presetsItem.addEventListener('click', ()=>{
+    menu.classList.add('hidden');
+    openPresetManager();
   });
 
   const settingsItem = document.createElement('button');
@@ -1424,7 +1554,8 @@ function renderAuthArea(){
     settingsOverlay.classList.remove('hidden');
   });
 
-  menu.appendChild(editIconItem);
+  menu.appendChild(addIconItem);
+  menu.appendChild(presetsItem);
   menu.appendChild(settingsItem);
 
   trigger.addEventListener('click', (e)=>{
@@ -1470,27 +1601,28 @@ async function signInWithGoogle(){
 if(canUseFirestore){
   auth.onAuthStateChanged(async (user)=>{
     currentUser = user;
-    myHugIcon = null;
-    myArmsIcon = null;
-    myArmsLeftIcon = null;
-    myArmsRightIcon = null;
+    myIcons = [];
+    myPresetIds = [];
     if(user){
       try{
         const doc = await db.collection('users').doc(user.uid).get();
         if(doc.exists){
           const data = doc.data();
-          if(data.hugIcon) myHugIcon = data.hugIcon;
-          if(data.armsIcon){
-            myArmsIcon = data.armsIcon;
+          if(Array.isArray(data.icons) && data.icons.length){
+            myIcons = data.icons;
+            myPresetIds = Array.isArray(data.presetIds) && data.presetIds.length ? data.presetIds : [myIcons[myIcons.length - 1].id];
+          } else if(data.hugIcon){
+            // 예전 방식(아이콘 1개)으로 저장된 계정을 새 구조(모음 + 프리셋)로 한 번만 변환
+            const legacy = { id: 'legacy', hugIcon: data.hugIcon, armsIcon: data.armsIcon || null, createdAt: 0 };
+            myIcons = [legacy];
+            myPresetIds = ['legacy'];
             try{
-              const split = await splitArmsImage(myArmsIcon);
-              myArmsLeftIcon = split.left;
-              myArmsRightIcon = split.right;
-            }catch(e){ console.error('팔 이미지 분리 실패', e); }
+              await db.collection('users').doc(user.uid).set({ icons: myIcons, presetIds: myPresetIds }, { merge: true });
+            }catch(e){ console.error('아이콘 구조 변환 실패', e); }
           }
         }
       }catch(e){ console.error('내 아이콘 불러오기 실패', e); }
-      if(!myHugIcon) openIconModal(); // 첫 로그인이면 바로 그리도록 유도
+      if(myIcons.length === 0) openIconModal(); // 첫 로그인이면 바로 그리도록 유도
     }
     renderAuthArea();
     refreshDeleteButtons();
@@ -1709,6 +1841,59 @@ document.getElementById('signOutBtn').addEventListener('click', ()=>{
 });
 settingsOverlay.addEventListener('click', (e)=>{ if(e.target === settingsOverlay) settingsOverlay.classList.add('hidden'); });
 
+/* ---- 아이콘 프리셋 관리 ---- */
+const presetOverlay = document.getElementById('presetOverlay');
+const presetGrid = document.getElementById('presetGrid');
+let pendingPresetIds = [];
+
+function openPresetManager(){
+  pendingPresetIds = [...myPresetIds];
+  renderPresetGrid();
+  presetOverlay.classList.remove('hidden');
+}
+
+function renderPresetGrid(){
+  presetGrid.innerHTML = '';
+  if(myIcons.length === 0){
+    presetGrid.innerHTML = '<div class="notif-empty">아직 그린 아이콘이 없어요. "아이콘 추가"로 먼저 그려보세요.</div>';
+    return;
+  }
+  myIcons.slice().reverse().forEach(icon=>{
+    const item = document.createElement('button');
+    item.className = 'preset-grid-item' + (pendingPresetIds.includes(icon.id) ? ' selected' : '');
+    item.innerHTML = `<img src="${icon.hugIcon}" alt="">`;
+    item.addEventListener('click', ()=>{
+      const idx = pendingPresetIds.indexOf(icon.id);
+      if(idx !== -1){
+        pendingPresetIds.splice(idx, 1);
+      } else {
+        if(pendingPresetIds.length >= 5){
+          alert('프리셋은 최대 5개까지 고를 수 있어요.');
+          return;
+        }
+        pendingPresetIds.push(icon.id);
+      }
+      renderPresetGrid();
+    });
+    presetGrid.appendChild(item);
+  });
+}
+
+document.getElementById('closePresetManager').addEventListener('click', ()=> presetOverlay.classList.add('hidden'));
+presetOverlay.addEventListener('click', (e)=>{ if(e.target === presetOverlay) presetOverlay.classList.add('hidden'); });
+document.getElementById('savePresets').addEventListener('click', async ()=>{
+  if(!currentUser) return;
+  try{
+    await db.collection('users').doc(currentUser.uid).update({ presetIds: pendingPresetIds });
+    myPresetIds = pendingPresetIds;
+    renderAuthArea();
+    presetOverlay.classList.add('hidden');
+  }catch(e){
+    console.error('프리셋 저장 실패', e);
+    alert('프리셋 저장에 실패했어요. 잠시 후 다시 시도해주세요.');
+  }
+});
+
 saveIcon.addEventListener('click', async ()=>{
   if(!currentUser){ iconOverlay.classList.add('hidden'); return; }
 
@@ -1719,20 +1904,18 @@ saveIcon.addEventListener('click', async ()=>{
 
   const bodyDataUrl = layerCanvases.body.toDataURL('image/png');
   const armsDataUrl = layerCanvases.arms.toDataURL('image/png');
+  const newIcon = { id: 'icon-' + Date.now(), hugIcon: bodyDataUrl, armsIcon: armsDataUrl, createdAt: Date.now() };
+  const wasFirstIcon = myIcons.length === 0;
 
   saveIcon.disabled = true;
   try{
-    await db.collection('users').doc(currentUser.uid).set({
-      hugIcon: bodyDataUrl,
-      armsIcon: armsDataUrl
-    }, { merge: true });
-    myHugIcon = bodyDataUrl;
-    myArmsIcon = armsDataUrl;
-    try{
-      const split = await splitArmsImage(armsDataUrl);
-      myArmsLeftIcon = split.left;
-      myArmsRightIcon = split.right;
-    }catch(e){ console.error('팔 이미지 분리 실패', e); }
+    const payload = { icons: FieldValue.arrayUnion(newIcon) };
+    if(wasFirstIcon) payload.presetIds = [newIcon.id];
+    await db.collection('users').doc(currentUser.uid).set(payload, { merge: true });
+
+    myIcons.push(newIcon);
+    if(wasFirstIcon) myPresetIds = [newIcon.id];
+
     renderAuthArea();
     iconOverlay.classList.add('hidden');
   }catch(e){
