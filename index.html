@@ -500,16 +500,33 @@
     padding: 4px 2px 18px;
   }
   .preset-grid-item{
+    position: relative;
     width: 56px; height: 56px;
+    cursor: pointer;
+  }
+  .preset-grid-item-inner{
+    width: 100%; height: 100%;
     border-radius: 50%;
     border: 3px solid transparent;
-    padding: 0;
     background: rgba(91,70,54,0.06);
-    cursor: pointer;
     overflow: hidden;
   }
-  .preset-grid-item img{ width:100%; height:100%; object-fit: cover; display:block; }
-  .preset-grid-item.selected{ border-color: var(--accent); }
+  .preset-grid-item-inner img{ width:100%; height:100%; object-fit: cover; display:block; }
+  .preset-grid-item.selected .preset-grid-item-inner{ border-color: var(--accent); }
+  .preset-grid-item-delete{
+    position: absolute; top: -4px; right: -4px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--card-bg);
+    background: #b23b3b;
+    color: #fff;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .preset-grid-item-delete:hover{ background: #8f2c2c; }
 
   .draw-canvas-wrap{
     position: relative;
@@ -1870,9 +1887,9 @@ function renderPresetGrid(){
     return;
   }
   myIcons.slice().reverse().forEach(icon=>{
-    const item = document.createElement('button');
+    const item = document.createElement('div');
     item.className = 'preset-grid-item' + (pendingPresetIds.includes(icon.id) ? ' selected' : '');
-    item.innerHTML = `<img src="${icon.hugIcon}" alt="">`;
+    item.innerHTML = `<span class="preset-grid-item-inner"><img src="${icon.hugIcon}" alt=""></span>`;
     item.addEventListener('click', ()=>{
       const idx = pendingPresetIds.indexOf(icon.id);
       if(idx !== -1){
@@ -1886,8 +1903,38 @@ function renderPresetGrid(){
       }
       renderPresetGrid();
     });
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'preset-grid-item-delete';
+    delBtn.title = '이 아이콘 삭제하기';
+    delBtn.textContent = '×';
+    delBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      deleteMyIcon(icon);
+    });
+    item.appendChild(delBtn);
+
     presetGrid.appendChild(item);
   });
+}
+
+async function deleteMyIcon(icon){
+  if(!currentUser) return;
+  if(!confirm('이 아이콘을 삭제할까요? 되돌릴 수 없어요.')) return;
+
+  const newIcons = myIcons.filter(i => i.id !== icon.id);
+  const newPresetIds = myPresetIds.filter(id => id !== icon.id);
+  try{
+    await db.collection('users').doc(currentUser.uid).update({ icons: newIcons, presetIds: newPresetIds });
+    myIcons = newIcons;
+    myPresetIds = newPresetIds;
+    pendingPresetIds = pendingPresetIds.filter(id => id !== icon.id);
+    renderPresetGrid();
+    renderAuthArea();
+  }catch(e){
+    console.error('아이콘 삭제 실패', e);
+    alert('아이콘 삭제에 실패했어요. 잠시 후 다시 시도해주세요.');
+  }
 }
 
 document.getElementById('closePresetManager').addEventListener('click', ()=> presetOverlay.classList.add('hidden'));
