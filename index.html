@@ -43,6 +43,17 @@
     font-family: 'Noto Sans KR', sans-serif;
     min-height:100vh;
   }
+  .bg-clover{
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    height: min(42vh, 480px);
+    width: auto;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0.9;
+  }
   .topbar{
     position: sticky;
     top: 0;
@@ -590,6 +601,8 @@
 </style>
 </head>
 <body>
+
+<img class="bg-clover" src="assets/clover.webp" alt="" aria-hidden="true">
 
 <h2 class="sr-only">허그 클럽: 사람들이 익명으로 사연을 남기고, 허그 버튼과 사연별 익명 채팅으로 서로 포옹을 나누는 게시판입니다.</h2>
 
