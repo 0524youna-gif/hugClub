@@ -1023,6 +1023,8 @@ function unwatchHugsForNote(noteId){
 }
 
 async function handleIncomingHug(noteId, hugData){
+  vibrateHug(); // 누군가 지금 내 글을 안아주고 있다는 걸 손으로도 느끼게
+
   let icon = null;
   if(hugData.uid){
     const icons = await fetchUserIcons(hugData.uid);
@@ -1245,6 +1247,11 @@ async function onHugButtonClick(note, cardEl, btnEl, countEl){
   closeOpenHugPicker = closePicker;
 }
 
+// 포근하게 안기는 느낌의 진동 패턴 (짧게 눌렸다가 좀 더 길게 꽉). 모바일 아니면 조용히 무시됨.
+function vibrateHug(){
+  if(navigator.vibrate) navigator.vibrate([30, 40, 90]);
+}
+
 async function handleHug(note, cardEl, btnEl, countEl, chosenIcon){
   if(huggedIds.has(note.id)) return;
   huggedIds.add(note.id);
@@ -1252,6 +1259,7 @@ async function handleHug(note, cardEl, btnEl, countEl, chosenIcon){
   btnEl.classList.add('hugged');
   btnEl.querySelector('.hug-label').textContent = '안아줬어요';
 
+  vibrateHug();
   const armsSplit = await getIconArmsSplit(chosenIcon);
   playHugAnimation(cardEl, chosenIcon ? chosenIcon.hugIcon : null, armsSplit.left, armsSplit.right);
 
