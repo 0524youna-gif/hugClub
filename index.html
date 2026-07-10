@@ -108,11 +108,19 @@
     cursor: pointer;
   }
   .profile-trigger:hover{ background: rgba(91,70,54,0.1); }
-  .profile-trigger .my-icon-thumb{
-    width: 26px; height: 26px; border-radius: 50%;
+  .my-icon-thumb-wrap{
+    position: relative;
+    width: 40px; height: 40px;
+    border-radius: 12px;
     border: 2px solid var(--accent);
-    object-fit: cover;
     background: #fff;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .my-icon-thumb-layer{
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: contain;
   }
   .profile-trigger .chevron{ width: 11px; height: 11px; color: var(--ink-dim); }
   .profile-menu{
@@ -373,10 +381,10 @@
     position:absolute;
     left: 50%;
     top: 50%;
-    width: 84px;
-    height: 84px;
-    margin-left: -42px;
-    margin-top: -42px;
+    width: 134px;
+    height: 134px;
+    margin-left: -67px;
+    margin-top: -67px;
     object-fit: contain;
     filter: drop-shadow(0 4px 10px rgba(91,70,54,0.3));
     opacity: 0;
@@ -1523,7 +1531,10 @@ function renderAuthArea(){
   const trigger = document.createElement('button');
   trigger.className = 'profile-trigger';
   trigger.innerHTML = `
-    <img class="my-icon-thumb" src="${(primaryIcon && primaryIcon.hugIcon) || makeDefaultThumb()}" alt="">
+    <span class="my-icon-thumb-wrap">
+      ${primaryIcon && primaryIcon.armsIcon ? `<img class="my-icon-thumb-layer" src="${primaryIcon.armsIcon}" alt="">` : ''}
+      <img class="my-icon-thumb-layer" src="${(primaryIcon && primaryIcon.hugIcon) || makeDefaultThumb()}" alt="">
+    </span>
     <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
   `;
 
@@ -1649,7 +1660,7 @@ const layerCanvases = {
 // 실제로 안아줄 대상(메모 카드)을 맨 밑에 살짝 그려서, 그 위에 도안선을 겹쳐 보여준다.
 // 둘 다 iconGuideCanvas에만 그려지고 저장되는 캔버스에는 안 남는다.
 function drawMemoReference(ctx){
-  const x = 60, y = 106, w = 100, h = 66, fold = 15;
+  const x = 35, y = 104, w = 150, h = 99, fold = 23;
   ctx.save();
   ctx.fillStyle = 'rgba(91,70,54,0.06)';
   ctx.strokeStyle = 'rgba(91,70,54,0.3)';
@@ -1696,15 +1707,15 @@ function drawGuideOverlay(layer){
 
   if(layer === 'arms'){
     iconGuideCtx.beginPath();
-    iconGuideCtx.arc(70, 130, 55, Math.PI*0.15, Math.PI*1.3);
+    iconGuideCtx.arc(50, 140, 83, Math.PI*0.15, Math.PI*1.3);
     iconGuideCtx.stroke();
 
     iconGuideCtx.beginPath();
-    iconGuideCtx.arc(150, 130, 55, Math.PI*1.7, Math.PI*0.85, true);
+    iconGuideCtx.arc(170, 140, 83, Math.PI*1.7, Math.PI*0.85, true);
     iconGuideCtx.stroke();
   } else {
     iconGuideCtx.beginPath();
-    iconGuideCtx.arc(110, 95, 26, 0, Math.PI*2);
+    iconGuideCtx.arc(110, 88, 39, 0, Math.PI*2);
     iconGuideCtx.stroke();
   }
   iconGuideCtx.restore();
