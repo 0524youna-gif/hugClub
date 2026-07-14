@@ -503,6 +503,25 @@
   }
   .layer-tab.active{ background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
+  .sort-bar{
+    display:flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 18px;
+  }
+  .sort-btn{
+    background: transparent;
+    border: 1px solid rgba(91,70,54,0.25);
+    color: var(--ink-dim);
+    font-weight: 700;
+    font-size: 13px;
+    padding: 7px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .sort-btn:hover{ background: rgba(91,70,54,0.06); }
+  .sort-btn.active{ background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
   .preset-grid{
     display:flex;
     flex-wrap: wrap;
@@ -649,6 +668,12 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       첫 이야기 남기기
     </button>
+  </div>
+  <div class="sort-bar">
+    <button class="sort-btn active" data-sort="createdAt_desc">최신순</button>
+    <button class="sort-btn" data-sort="hugs_desc">위로 많은순</button>
+    <button class="sort-btn" data-sort="hugs_asc">위로 적은순</button>
+    <button class="sort-btn" data-sort="commentCount_desc">채팅 많은순</button>
   </div>
   <div class="board" id="board"></div>
 </div>
@@ -1507,35 +1532,63 @@ commentInput.addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' && !submitComment.disabled) submitCommentHandler();
 });
 
-// 게시판 실시간 리스너: 새 사연/삭제는 카드를 추가·제거하고,
-// 허그 수 같은 값 변경은 기존 카드 DOM을 그대로 둔 채 숫자만 갱신한다.
-// (카드를 통째로 다시 그리면 허그 애니메이션 레이어까지 같이 사라져서 끊겨 보였음)
-if(canUseFirestore){
-  db.collection('notes').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-    snapshot.docChanges().forEach(change => {
-      const note = { id: change.doc.id, ...change.doc.data() };
+// 게시판 실시간 리스너: 정렬 기준이 바뀌면 쿼리를 새로 걸고 처음부터 다시 그린다.
+// 같은 정렬 안에서는 기존 카드 DOM을 재사용해서 값만 갱신하고(허그 애니메이션 레이어 보존),
+// 순서가 바뀐 것만 다시 붙여서(appendChild는 이미 붙어있는 노드를 이동시킴) 위치를 맞춘다.
+const SORTS = {
+  createdAt_desc: { field: 'createdAt', dir: 'desc' },
+  hugs_desc: { field: 'hugs', dir: 'desc' },
+  hugs_asc: { field: 'hugs', dir: 'asc' },
+  commentCount_desc: { field: 'commentCount', dir: 'desc' },
+};
+let unsubscribeNotes = null;
 
-      if(change.type === 'added'){
-        if(noteEls.has(note.id)) return;
-        const el = createNoteEl(note, noteOrder.length);
+function subscribeNotes(sortKey){
+  if(unsubscribeNotes) unsubscribeNotes();
+  board.innerHTML = '';
+  noteEls.clear();
+  noteOrder = [];
+
+  const { field, dir } = SORTS[sortKey];
+  unsubscribeNotes = db.collection('notes').orderBy(field, dir).onSnapshot(snapshot => {
+    const nextOrder = [];
+    snapshot.forEach(doc=>{
+      const note = { id: doc.id, ...doc.data() };
+      nextOrder.push(note.id);
+      let el = noteEls.get(note.id);
+      if(!el){
+        el = createNoteEl(note, noteEls.size);
         noteEls.set(note.id, el);
-        noteOrder.splice(change.newIndex, 0, note.id);
-        const children = board.children;
-        if(change.newIndex >= children.length){ board.appendChild(el); }
-        else { board.insertBefore(el, children[change.newIndex]); }
-      } else if(change.type === 'modified'){
-        const el = noteEls.get(note.id);
-        if(el) updateNoteCard(el, note);
-      } else if(change.type === 'removed'){
-        const el = noteEls.get(note.id);
-        if(el) el.remove();
-        noteEls.delete(note.id);
-        const idx = noteOrder.indexOf(note.id);
-        if(idx !== -1) noteOrder.splice(idx, 1);
+      } else {
+        updateNoteCard(el, note);
       }
     });
+
+    // 스냅샷에 더 이상 없는(삭제된) 카드 정리
+    noteEls.forEach((el, id)=>{
+      if(!nextOrder.includes(id)){
+        el.remove();
+        noteEls.delete(id);
+      }
+    });
+
+    noteOrder = nextOrder;
+    noteOrder.forEach(id => board.appendChild(noteEls.get(id)));
     renderEmptyState();
   }, err => console.error('notes listener failed', err));
+}
+
+document.querySelectorAll('.sort-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(btn.classList.contains('active')) return;
+    document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    subscribeNotes(btn.dataset.sort);
+  });
+});
+
+if(canUseFirestore){
+  subscribeNotes('createdAt_desc');
 } else {
   renderEmptyState();
 }
