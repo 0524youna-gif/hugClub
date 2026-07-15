@@ -715,9 +715,10 @@
 <div class="modal-overlay hidden" id="iconOverlay">
   <div class="modal">
     <h3>나만의 허그 아이콘</h3>
-    <p class="hint">몸통(얼굴)이랑 팔을 따로 그려주세요. 허그할 때 팔이 따로 움직이면서 감싸안아요.</p>
+    <p class="hint">얼굴·어깨·팔을 따로 그려주세요. 다른 부위는 흐리게 겹쳐 보여서 맞춰 그리기 쉬워요. 허그할 때 팔이 점선 기준으로 나뉘어 좌우로 움직이며 감싸안아요.</p>
     <div class="layer-tabs">
-      <button class="layer-tab active" id="layerBodyTab" data-layer="body">몸통</button>
+      <button class="layer-tab active" id="layerFaceTab" data-layer="face">얼굴</button>
+      <button class="layer-tab" id="layerShouldersTab" data-layer="shoulders">어깨</button>
       <button class="layer-tab" id="layerArmsTab" data-layer="arms">팔</button>
     </div>
     <div class="draw-canvas-wrap">
@@ -1741,9 +1742,10 @@ let isErasing = false;
 let isDrawing = false;
 let lastX = 0, lastY = 0;
 
-let activeLayer = 'body'; // 'body' | 'arms'
+let activeLayer = 'face'; // 'face' | 'shoulders' | 'arms'
 const layerCanvases = {
-  body: Object.assign(document.createElement('canvas'), { width: 220, height: 220 }),
+  face: Object.assign(document.createElement('canvas'), { width: 220, height: 220 }),
+  shoulders: Object.assign(document.createElement('canvas'), { width: 220, height: 220 }),
   arms: Object.assign(document.createElement('canvas'), { width: 220, height: 220 }),
 };
 
@@ -1790,6 +1792,14 @@ function drawGuideOverlay(layer){
   iconGuideCtx.clearRect(0,0,220,220);
   drawMemoReference(iconGuideCtx);
 
+  // 지금 그리고 있지 않은 다른 부위들을 흐리게 겹쳐 보여줘서 위치를 맞춰 그릴 수 있게 한다
+  iconGuideCtx.save();
+  iconGuideCtx.globalAlpha = 0.32;
+  Object.keys(layerCanvases).forEach(key=>{
+    if(key !== layer) iconGuideCtx.drawImage(layerCanvases[key], 0, 0);
+  });
+  iconGuideCtx.restore();
+
   iconGuideCtx.save();
   iconGuideCtx.strokeStyle = 'rgba(91,70,54,0.25)';
   iconGuideCtx.lineWidth = 3;
@@ -1802,6 +1812,23 @@ function drawGuideOverlay(layer){
 
     iconGuideCtx.beginPath();
     iconGuideCtx.arc(170, 140, 83, Math.PI*1.7, Math.PI*0.85, true);
+    iconGuideCtx.stroke();
+
+    // 허그 애니메이션에서 팔이 실제로 좌우로 잘리는 기준선
+    iconGuideCtx.save();
+    iconGuideCtx.setLineDash([7,7]);
+    iconGuideCtx.strokeStyle = 'rgba(91,70,54,0.45)';
+    iconGuideCtx.lineWidth = 2;
+    iconGuideCtx.beginPath();
+    iconGuideCtx.moveTo(110, 0);
+    iconGuideCtx.lineTo(110, 220);
+    iconGuideCtx.stroke();
+    iconGuideCtx.restore();
+  } else if(layer === 'shoulders'){
+    iconGuideCtx.beginPath();
+    iconGuideCtx.moveTo(48, 205);
+    iconGuideCtx.quadraticCurveTo(50, 130, 110, 122);
+    iconGuideCtx.quadraticCurveTo(170, 130, 172, 205);
     iconGuideCtx.stroke();
   } else {
     iconGuideCtx.beginPath();
@@ -1827,7 +1854,8 @@ function switchLayer(layer){
     t.classList.toggle('active', t.dataset.layer === activeLayer);
   });
 }
-document.getElementById('layerBodyTab').addEventListener('click', ()=> switchLayer('body'));
+document.getElementById('layerFaceTab').addEventListener('click', ()=> switchLayer('face'));
+document.getElementById('layerShouldersTab').addEventListener('click', ()=> switchLayer('shoulders'));
 document.getElementById('layerArmsTab').addEventListener('click', ()=> switchLayer('arms'));
 
 // 팔 그림(220x220)을 절반으로 잘라 허그 애니메이션에서 좌우로 쓸 수 있게 만든다
@@ -1922,13 +1950,12 @@ iconCanvas.addEventListener('pointermove', moveDraw);
 window.addEventListener('pointerup', endDraw);
 
 function openIconModal(){
-  activeLayer = 'body';
-  layerCanvases.body.getContext('2d').clearRect(0,0,220,220);
-  layerCanvases.arms.getContext('2d').clearRect(0,0,220,220);
+  activeLayer = 'face';
+  Object.values(layerCanvases).forEach(c => c.getContext('2d').clearRect(0,0,220,220));
   iconCtx.clearRect(0,0,220,220);
-  drawGuideOverlay('body');
+  drawGuideOverlay('face');
   document.querySelectorAll('.layer-tab').forEach(t=>{
-    t.classList.toggle('active', t.dataset.layer === 'body');
+    t.classList.toggle('active', t.dataset.layer === 'face');
   });
   iconOverlay.classList.remove('hidden');
 }
@@ -2033,7 +2060,14 @@ saveIcon.addEventListener('click', async ()=>{
   curStore.clearRect(0,0,220,220);
   curStore.drawImage(iconCanvas, 0, 0);
 
-  const bodyDataUrl = layerCanvases.body.toDataURL('image/png');
+  // 어깨(뒤) + 얼굴(앞)을 하나로 합쳐서 기존 hugIcon 한 장으로 저장한다
+  const bodyCanvas = document.createElement('canvas');
+  bodyCanvas.width = 220; bodyCanvas.height = 220;
+  const bodyCtx = bodyCanvas.getContext('2d');
+  bodyCtx.drawImage(layerCanvases.shoulders, 0, 0);
+  bodyCtx.drawImage(layerCanvases.face, 0, 0);
+
+  const bodyDataUrl = bodyCanvas.toDataURL('image/png');
   const armsDataUrl = layerCanvases.arms.toDataURL('image/png');
   const newIcon = { id: 'icon-' + Date.now(), hugIcon: bodyDataUrl, armsIcon: armsDataUrl, createdAt: Date.now() };
   const wasFirstIcon = myIcons.length === 0;
