@@ -585,6 +585,25 @@
   }
   .preset-grid-item-inner img{ width:100%; height:100%; object-fit: cover; display:block; }
   .preset-grid-item.selected .preset-grid-item-inner{ border-color: var(--accent); }
+  .preset-grid-item.primary .preset-grid-item-inner{ border-color: var(--dot-1); box-shadow: 0 0 0 2px var(--dot-1); }
+  .preset-grid-item-star{
+    position: absolute; bottom: -4px; left: -4px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--card-bg);
+    background: var(--ink-faint);
+    color: #fff;
+    font-size: 11px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .preset-grid-item-star:hover{ background: var(--ink-dim); }
+  .preset-grid-item-star.primary{
+    background: var(--dot-1);
+    cursor: default;
+  }
   .preset-grid-item-delete{
     position: absolute; top: -4px; right: -4px;
     width: 20px; height: 20px;
@@ -803,7 +822,7 @@
 <div class="modal-overlay hidden" id="presetOverlay">
   <div class="modal">
     <h3>아이콘 프리셋 관리</h3>
-    <p class="hint">허그할 때 바로 골라 쓸 아이콘이에요. 최대 5개까지 고를 수 있어요.</p>
+    <p class="hint">허그할 때 바로 골라 쓸 아이콘이에요. 최대 5개까지 고를 수 있어요.<br>★ 표시된 대표 아이콘은 허그하기를 꾹 눌러 안을 때 자동으로 쓰여요. 별 모양(☆)을 눌러 바꿀 수 있어요.</p>
     <div class="preset-grid" id="presetGrid"></div>
     <div class="modal-footer">
       <button class="btn-ghost" id="closePresetManager">닫기</button>
@@ -2209,8 +2228,11 @@ function renderPresetGrid(){
     return;
   }
   myIcons.slice().reverse().forEach(icon=>{
+    const isSelected = pendingPresetIds.includes(icon.id);
+    const isPrimary = pendingPresetIds[0] === icon.id;
+
     const item = document.createElement('div');
-    item.className = 'preset-grid-item' + (pendingPresetIds.includes(icon.id) ? ' selected' : '');
+    item.className = 'preset-grid-item' + (isSelected ? ' selected' : '') + (isPrimary ? ' primary' : '');
     item.innerHTML = `<span class="preset-grid-item-inner"><img src="${icon.hugIcon}" alt=""></span>`;
     item.addEventListener('click', ()=>{
       const idx = pendingPresetIds.indexOf(icon.id);
@@ -2225,6 +2247,25 @@ function renderPresetGrid(){
       }
       renderPresetGrid();
     });
+
+    if(isPrimary){
+      const badge = document.createElement('span');
+      badge.className = 'preset-grid-item-star primary';
+      badge.title = '허그하기를 꾹 누르면 이 아이콘으로 안아줘요';
+      badge.textContent = '★';
+      item.appendChild(badge);
+    } else if(isSelected){
+      const starBtn = document.createElement('button');
+      starBtn.className = 'preset-grid-item-star';
+      starBtn.title = '대표 아이콘으로 설정 (꾹 눌러 안을 때 이걸로 안아줘요)';
+      starBtn.textContent = '☆';
+      starBtn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        pendingPresetIds = [icon.id, ...pendingPresetIds.filter(id => id !== icon.id)];
+        renderPresetGrid();
+      });
+      item.appendChild(starBtn);
+    }
 
     const delBtn = document.createElement('button');
     delBtn.className = 'preset-grid-item-delete';
