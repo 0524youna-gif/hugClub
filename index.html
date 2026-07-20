@@ -2308,6 +2308,9 @@ function openIconModal(){
   iconCtx.clearRect(0,0,220,220);
   drawGuideOverlay('face');
   setActiveLayerTab('face');
+  // PSD 업로드 상태 문구가 지난번 결과로 남아있지 않도록 매번 열 때 기본 안내로 되돌린다
+  document.getElementById('psdUploadStatus').textContent =
+    '레이어 이름에 "얼굴"/"어깨"/"팔"(face/shoulders/arm)이 들어가야 자동으로 인식돼요';
   iconOverlay.classList.remove('hidden');
 }
 // 닫기 버튼 + 배경 클릭으로 닫히는 단순 모달 공통 배선 (부가 로직 없는 오버레이만 해당)
