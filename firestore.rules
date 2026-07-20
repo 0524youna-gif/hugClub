@@ -25,5 +25,14 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
+
+    match /presence/{visitorId} {
+      // 익명 방문자 하트비트. 로그인이 없어 소유권을 강제할 수 없어 다른 컬렉션과 동일하게 열어둠.
+      // delete는 오래된 기록을 다른 방문자가 지나가는 김에 정리하는 로직에 쓰인다.
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
+    }
   }
 }

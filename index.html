@@ -73,6 +73,25 @@
     color: var(--ink);
   }
   .brand p{ margin:0; font-size: 14px; color: var(--ink-dim); }
+  .visitor-count{
+    display:inline-flex;
+    align-items:center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(91,70,54,0.06);
+    color: var(--ink-dim);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .visitor-count.hidden{ display:none; }
+  .visitor-count-dot{
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #6bbf6b;
+    flex-shrink: 0;
+  }
   .write-btn{
     background: var(--accent);
     color: var(--accent-text);
@@ -262,6 +281,8 @@
     color: var(--ink);
     white-space: pre-wrap;
   }
+  .prompt-card{ background: var(--paper-1); }
+  .prompt-pin{ background: var(--dot-1); }
 
   .note{
     break-inside: avoid;
@@ -628,6 +649,7 @@
   <div class="brand">
     <h1>허그 클럽</h1>
     <p>오세요 허그클럽. 상처받은 당신을 안아드립니다. (* 주의사항: 공감금지, 연민금지, 이해금지) 사실 해도 돼요 </p>
+    <span class="visitor-count hidden" id="visitorCount"><span class="visitor-count-dot"></span><span id="visitorCountLabel"></span></span>
   </div>
   <div class="topbar-actions">
     <button class="write-btn" id="openWrite">
@@ -660,6 +682,10 @@
     <span class="announcement-pin">📌 공지</span>
     <!-- 공지 내용은 이 p 태그 안 텍스트만 바꾸면 됩니다 -->
     <p class="announcement-text">허그 클럽에 오신 걸 환영합니다.<br><br>"무슨... 마법 같은 거예요?"<br>"그냥 허그에요."</p>
+  </div>
+  <div class="announcement prompt-card" id="promptCard">
+    <span class="announcement-pin prompt-pin">💭 오늘의 질문</span>
+    <p class="announcement-text" id="promptText"></p>
   </div>
   <div id="emptyState" class="empty-state" style="display:none;">
     <h2>아직 아무도 마음을 꺼내놓지 않았어요</h2>
@@ -806,6 +832,47 @@ const DOT_COLORS = ['var(--dot-1)','var(--dot-2)','var(--dot-3)','var(--dot-4)',
 const NAME_ADJ = ['조용한','다정한','씩씩한','포근한','말랑한','느긋한','반짝이는','수줍은','따뜻한','엉뚱한'];
 const NAME_NOUN = ['여우','고양이','구름','파도','나무','별','우산','고래','참새','토끼'];
 
+// 매일 자정 기준으로 바뀌는 오늘의 질문. 서버 없이 날짜만으로 정해진다.
+const DAILY_PROMPTS = [
+  '오늘 하루 중 가장 마음에 남는 순간은 언제였나요?',
+  '요즘 나를 가장 힘들게 하는 게 뭔가요?',
+  '오늘 누군가에게 하지 못한 말이 있나요?',
+  '지금 이 순간, 가장 듣고 싶은 말은 뭔가요?',
+  '요즘 자주 떠오르는 사람이 있나요?',
+  '오늘 나를 웃게 한 아주 작은 일이 있었나요?',
+  '마음속에 오래 담아둔 이야기가 있나요?',
+  '요즘 스스로에게 가장 미안한 건 뭔가요?',
+  '오늘 하루, 나를 칭찬해주고 싶은 부분은?',
+  '지금 가장 그리운 순간은 언제인가요?',
+  '요즘 잠들기 전에 무슨 생각을 하나요?',
+  '오늘 누군가의 위로가 필요했던 순간이 있었나요?',
+  '최근에 나를 울게 한 건 뭐였나요?',
+  '지금 내 마음의 날씨는 어떤가요?',
+  '오늘 하루를 색깔로 표현한다면?',
+  '요즘 혼자 삭이고 있는 걱정이 있나요?',
+  '지금 누구보다 나 자신에게 해주고 싶은 말은?',
+  '오늘 유난히 무거웠던 마음이 있었나요?',
+  '최근에 나를 지치게 한 일은 뭔가요?',
+  '지금 이 순간 가장 안기고 싶은 사람은 누구인가요?',
+  '오늘 하루, 버티느라 고생한 나에게 하고 싶은 말은?',
+  '요즘 자꾸 참게 되는 감정이 있나요?',
+  '지금 털어놓고 싶은데 못 하고 있는 이야기가 있나요?',
+  '오늘 나를 가장 웃게 한 사람은 누구였나요?',
+  '최근에 마음이 놓였던 순간은 언제였나요?',
+  '요즘 가장 자주 삼키는 말은 뭔가요?',
+  '지금 이 순간 솔직히 어떤 기분인가요?',
+  '오늘 하루, 나를 버티게 해준 건 뭐였나요?',
+  '요즘 나를 가장 잘 안아줄 수 있는 사람은 누구인가요?',
+  '지금 이 글을 읽는 당신, 오늘 하루 정말 수고 많았어요.',
+];
+function renderDailyPrompt(){
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now - startOfYear) / 86400000);
+  document.getElementById('promptText').textContent = DAILY_PROMPTS[dayOfYear % DAILY_PROMPTS.length];
+}
+renderDailyPrompt();
+
 const board = document.getElementById('board');
 const emptyState = document.getElementById('emptyState');
 
@@ -835,6 +902,9 @@ const saveIcon = document.getElementById('saveIcon');
 
 let huggedIds = new Set(JSON.parse(localStorage.getItem('hugged-by-me') || '[]'));
 let myNoteIds = new Set(JSON.parse(localStorage.getItem('my-notes') || '[]')); // 이 브라우저에서 내가 쓴 글 (삭제 버튼 노출용)
+function saveMyNoteIds(){
+  localStorage.setItem('my-notes', JSON.stringify(Array.from(myNoteIds)));
+}
 
 // 내가 메시지를 보낸 채팅방(글) 목록. 배열 맨 앞이 가장 최근에 대화한 방.
 let myChatIds = JSON.parse(localStorage.getItem('my-chats') || '[]');
@@ -1115,6 +1185,18 @@ function renderNotifications(){
   });
 }
 
+// 패널이 열려있을 때 바깥을 클릭하면 닫는 공통 로직.
+// panel/trigger는 엘리먼트를 그대로 줘도 되고, 매번 새로 조회해야 하면(예: 매 렌더마다 재생성되는 메뉴) 함수로 줘도 된다.
+function closeOnOutsideClick(getPanel, getTrigger){
+  document.addEventListener('click', (e)=>{
+    const panel = typeof getPanel === 'function' ? getPanel() : getPanel;
+    const trigger = typeof getTrigger === 'function' ? getTrigger() : getTrigger;
+    if(panel && !panel.classList.contains('hidden') && !panel.contains(e.target) && !(trigger && trigger.contains(e.target))){
+      panel.classList.add('hidden');
+    }
+  });
+}
+
 notifBell.addEventListener('click', (e)=>{
   e.stopPropagation();
   notifPanel.classList.toggle('hidden');
@@ -1123,11 +1205,7 @@ notifBell.addEventListener('click', (e)=>{
     notifBadge.classList.add('hidden');
   }
 });
-document.addEventListener('click', (e)=>{
-  if(!notifPanel.classList.contains('hidden') && !notifPanel.contains(e.target) && !notifBell.contains(e.target)){
-    notifPanel.classList.add('hidden');
-  }
-});
+closeOnOutsideClick(notifPanel, notifBell);
 
 
 /* ============================================================
@@ -1187,11 +1265,14 @@ chatListBtn.addEventListener('click', (e)=>{
   chatListPanel.classList.toggle('hidden');
   if(willOpen) renderChatList();
 });
-document.addEventListener('click', (e)=>{
-  if(!chatListPanel.classList.contains('hidden') && !chatListPanel.contains(e.target) && !chatListBtn.contains(e.target)){
-    chatListPanel.classList.add('hidden');
-  }
-});
+closeOnOutsideClick(chatListPanel, chatListBtn);
+
+// Firestore 쓰기가 실패했을 때 콘솔 로그 + 사용자 알림을 공통 문구로 띄운다.
+function reportFailure(label, e){
+  console.error(label + ' 실패', e);
+  alert(label + '에 실패했어요. 잠시 후 다시 시도해주세요.');
+}
+
 async function handleDeleteNote(note, cardEl){
   if(!confirm('이 이야기를 삭제할까요? 되돌릴 수 없어요.')) return;
   cardEl.style.pointerEvents = 'none';
@@ -1208,12 +1289,11 @@ async function handleDeleteNote(note, cardEl){
     batch.delete(noteRef);
     await batch.commit();
     myNoteIds.delete(note.id);
-    localStorage.setItem('my-notes', JSON.stringify(Array.from(myNoteIds)));
+    saveMyNoteIds();
     unwatchHugsForNote(note.id);
     // 실제 DOM 제거는 notes 리스너의 'removed' 처리에서 담당
   }catch(e){
-    console.error('삭제 실패', e);
-    alert('삭제에 실패했어요. 잠시 후 다시 시도해주세요.');
+    reportFailure('삭제', e);
     cardEl.style.pointerEvents = '';
     cardEl.style.opacity = '';
   }
@@ -1409,7 +1489,7 @@ async function submitNote(){
   // 실시간 리스너가 카드를 그리기 전에 '내 글' 여부를 먼저 확정해둔다 (삭제 버튼 노출용)
   const ref = db.collection('notes').doc();
   myNoteIds.add(ref.id);
-  localStorage.setItem('my-notes', JSON.stringify(Array.from(myNoteIds)));
+  saveMyNoteIds();
   watchHugsForNote(ref.id); // 이 글에 허그 들어오면 알림 받기
 
   try{
@@ -1423,7 +1503,7 @@ async function submitNote(){
   }catch(e){
     console.error('submit failed', e);
     myNoteIds.delete(ref.id);
-    localStorage.setItem('my-notes', JSON.stringify(Array.from(myNoteIds)));
+    saveMyNoteIds();
     unwatchHugsForNote(ref.id);
     submitWrite.disabled = false;
   }
@@ -1588,8 +1668,65 @@ document.querySelectorAll('.sort-btn').forEach(btn=>{
   });
 });
 
+/* ============================================================
+   실시간 접속자 수: Firestore 하트비트 방식.
+   각 방문자가 주기적으로 presence/{visitorId} 문서에 시각을 남기고,
+   클라이언트가 그중 최근 것만 세어서 "지금 N명" 을 계산한다.
+   (Realtime Database의 onDisconnect처럼 즉시 감지되진 않고,
+   탭을 닫으면 최대 PRESENCE_WINDOW 만큼 지연되어 인원에서 빠진다)
+   ============================================================ */
+const HEARTBEAT_INTERVAL = 20000;             // 20초마다 살아있다고 기록
+const PRESENCE_WINDOW = 45000;                // 이 안에 기록 있으면 "접속중"
+const PRESENCE_STALE_AGE = 2 * 60 * 60 * 1000; // 2시간 지난 기록은 지나가는 김에 정리
+
+function getOrCreateVisitorId(){
+  let id = localStorage.getItem('visitor-id');
+  if(!id){
+    id = 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('visitor-id', id);
+  }
+  return id;
+}
+
+let presenceCache = new Map(); // visitorId -> lastSeen(ms)
+const visitorCountEl = document.getElementById('visitorCount');
+const visitorCountLabel = document.getElementById('visitorCountLabel');
+
+function recomputeVisitorCount(){
+  const cutoff = Date.now() - PRESENCE_WINDOW;
+  let count = 0;
+  presenceCache.forEach(lastSeen => { if(lastSeen > cutoff) count++; });
+  visitorCountLabel.textContent = `지금 ${count}명이 함께 있어요`;
+  visitorCountEl.classList.remove('hidden');
+}
+
+function startPresence(){
+  const myId = getOrCreateVisitorId();
+  const myRef = db.collection('presence').doc(myId);
+
+  const beat = () => myRef.set({ lastSeen: Date.now() }).catch(e => console.error('presence heartbeat failed', e));
+  beat();
+  setInterval(beat, HEARTBEAT_INTERVAL);
+
+  db.collection('presence').onSnapshot(snapshot => {
+    presenceCache = new Map();
+    const staleCutoff = Date.now() - PRESENCE_STALE_AGE;
+    snapshot.forEach(doc=>{
+      const lastSeen = doc.data().lastSeen || 0;
+      presenceCache.set(doc.id, lastSeen);
+      if(lastSeen < staleCutoff && doc.id !== myId){
+        doc.ref.delete().catch(()=>{}); // 오래 방치된 기록은 지나가는 김에 정리 (베스트 에포트)
+      }
+    });
+    recomputeVisitorCount();
+  }, err => console.error('presence listener failed', err));
+
+  setInterval(recomputeVisitorCount, 5000); // 새 하트비트가 없어도 주기적으로 활성 인원 다시 계산
+}
+
 if(canUseFirestore){
   subscribeNotes('createdAt_desc');
+  startPresence();
 } else {
   renderEmptyState();
 }
@@ -1670,12 +1807,7 @@ function renderAuthArea(){
   authArea.appendChild(chip);
 }
 
-document.addEventListener('click', (e)=>{
-  const menu = authArea.querySelector('.profile-menu');
-  if(menu && !menu.classList.contains('hidden') && !authArea.contains(e.target)){
-    menu.classList.add('hidden');
-  }
-});
+closeOnOutsideClick(() => authArea.querySelector('.profile-menu'), authArea);
 
 function makeDefaultThumb(){
   // 아직 아이콘을 안 그렸을 때 보여줄 기본 원형 플레이스홀더
@@ -1838,6 +1970,12 @@ function drawGuideOverlay(layer){
   iconGuideCtx.restore();
 }
 
+function setActiveLayerTab(layer){
+  document.querySelectorAll('.layer-tab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.layer === layer);
+  });
+}
+
 function switchLayer(layer){
   if(layer === activeLayer) return;
   // 지금 그리던 내용을 해당 레이어 저장소에 보관
@@ -1849,10 +1987,7 @@ function switchLayer(layer){
   iconCtx.clearRect(0,0,220,220);
   iconCtx.drawImage(layerCanvases[activeLayer], 0, 0);
   drawGuideOverlay(activeLayer);
-
-  document.querySelectorAll('.layer-tab').forEach(t=>{
-    t.classList.toggle('active', t.dataset.layer === activeLayer);
-  });
+  setActiveLayerTab(activeLayer);
 }
 document.getElementById('layerFaceTab').addEventListener('click', ()=> switchLayer('face'));
 document.getElementById('layerShouldersTab').addEventListener('click', ()=> switchLayer('shoulders'));
@@ -1954,20 +2089,22 @@ function openIconModal(){
   Object.values(layerCanvases).forEach(c => c.getContext('2d').clearRect(0,0,220,220));
   iconCtx.clearRect(0,0,220,220);
   drawGuideOverlay('face');
-  document.querySelectorAll('.layer-tab').forEach(t=>{
-    t.classList.toggle('active', t.dataset.layer === 'face');
-  });
+  setActiveLayerTab('face');
   iconOverlay.classList.remove('hidden');
 }
-cancelIcon.addEventListener('click', ()=> iconOverlay.classList.add('hidden'));
-iconOverlay.addEventListener('click', (e)=>{ if(e.target === iconOverlay) iconOverlay.classList.add('hidden'); });
+// 닫기 버튼 + 배경 클릭으로 닫히는 단순 모달 공통 배선 (부가 로직 없는 오버레이만 해당)
+function wireSimpleOverlay(overlay, closeBtn){
+  closeBtn.addEventListener('click', ()=> overlay.classList.add('hidden'));
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.classList.add('hidden'); });
+}
 
-document.getElementById('closeSettings').addEventListener('click', ()=> settingsOverlay.classList.add('hidden'));
+wireSimpleOverlay(iconOverlay, cancelIcon);
+
+wireSimpleOverlay(settingsOverlay, document.getElementById('closeSettings'));
 document.getElementById('signOutBtn').addEventListener('click', ()=>{
   settingsOverlay.classList.add('hidden');
   auth.signOut();
 });
-settingsOverlay.addEventListener('click', (e)=>{ if(e.target === settingsOverlay) settingsOverlay.classList.add('hidden'); });
 
 /* ---- 아이콘 프리셋 관리 ---- */
 const presetOverlay = document.getElementById('presetOverlay');
@@ -2032,13 +2169,11 @@ async function deleteMyIcon(icon){
     renderPresetGrid();
     renderAuthArea();
   }catch(e){
-    console.error('아이콘 삭제 실패', e);
-    alert('아이콘 삭제에 실패했어요. 잠시 후 다시 시도해주세요.');
+    reportFailure('아이콘 삭제', e);
   }
 }
 
-document.getElementById('closePresetManager').addEventListener('click', ()=> presetOverlay.classList.add('hidden'));
-presetOverlay.addEventListener('click', (e)=>{ if(e.target === presetOverlay) presetOverlay.classList.add('hidden'); });
+wireSimpleOverlay(presetOverlay, document.getElementById('closePresetManager'));
 document.getElementById('savePresets').addEventListener('click', async ()=>{
   if(!currentUser) return;
   try{
@@ -2047,8 +2182,7 @@ document.getElementById('savePresets').addEventListener('click', async ()=>{
     renderAuthArea();
     presetOverlay.classList.add('hidden');
   }catch(e){
-    console.error('프리셋 저장 실패', e);
-    alert('프리셋 저장에 실패했어요. 잠시 후 다시 시도해주세요.');
+    reportFailure('프리셋 저장', e);
   }
 });
 
@@ -2084,8 +2218,7 @@ saveIcon.addEventListener('click', async ()=>{
     renderAuthArea();
     iconOverlay.classList.add('hidden');
   }catch(e){
-    console.error('아이콘 저장 실패', e);
-    alert('아이콘 저장에 실패했어요. 잠시 후 다시 시도해주세요.');
+    reportFailure('아이콘 저장', e);
   }
   saveIcon.disabled = false;
 });
