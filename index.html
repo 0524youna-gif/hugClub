@@ -400,6 +400,37 @@
     transition: background 0.15s ease, transform 0.1s ease;
     overflow: visible;
   }
+
+  .hug-hint{
+    position: absolute;
+    bottom: calc(100% + 10px);
+    right: -6px;
+    background: var(--ink);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+    animation: hugHintBob 1.4s ease-in-out infinite;
+    z-index: 5;
+  }
+  .hug-hint::after{
+    content: '';
+    position: absolute;
+    top: 100%;
+    right: 14px;
+    border: 5px solid transparent;
+    border-top-color: var(--ink);
+  }
+  .hug-hint.hug-hint-hide{ opacity: 0; }
+  @keyframes hugHintBob{
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(4px); }
+  }
   .icon-btn:hover{ background: rgba(91,70,54,0.15); }
   .icon-btn:active{ transform: scale(0.95); }
   .icon-btn.hugged{ background: rgba(91,70,54,0.05); color: rgba(91,70,54,0.5); cursor: default; }
@@ -715,12 +746,33 @@
   }
   .draw-tool-btn.active{ background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
+  .advanced-options{
+    margin: 2px 0 14px;
+  }
+  .advanced-options summary{
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-dim);
+    list-style: none;
+    user-select: none;
+  }
+  .advanced-options summary::-webkit-details-marker{ display: none; }
+  .advanced-options summary::before{
+    content: '▸';
+    display: inline-block;
+    margin-right: 4px;
+    transition: transform 0.15s ease;
+  }
+  .advanced-options[open] summary::before{
+    transform: rotate(90deg);
+  }
   .psd-upload-row{
     display: flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-    margin: 2px 0 14px;
+    margin: 10px 0 0;
   }
   .psd-upload-status{
     font-size: 12px;
@@ -884,12 +936,15 @@
       <button class="draw-tool-btn" id="resetCanvasBtn">도안으로 초기화</button>
       <button class="draw-tool-btn" id="previewHugBtn">미리보기로 안아보기</button>
     </div>
-    <div class="psd-upload-row">
-      <input type="file" id="psdFileInput" accept=".psd" hidden>
-      <button class="draw-tool-btn" id="psdUploadBtn">PSD로 업로드</button>
-      <button class="draw-tool-btn" id="sampleIconBtn">샘플 아이콘 적용하기</button>
-      <span class="psd-upload-status" id="psdUploadStatus">레이어 이름에 "얼굴"/"어깨"/"팔"(face/shoulders/arm)이 들어가야 자동으로 인식돼요</span>
-    </div>
+    <details class="advanced-options">
+      <summary>고급 옵션</summary>
+      <div class="psd-upload-row">
+        <input type="file" id="psdFileInput" accept=".psd" hidden>
+        <button class="draw-tool-btn" id="psdUploadBtn">PSD로 업로드</button>
+        <button class="draw-tool-btn" id="sampleIconBtn">샘플 아이콘 적용하기</button>
+        <span class="psd-upload-status" id="psdUploadStatus">레이어 이름에 "얼굴"/"어깨"/"팔"(face/shoulders/arm)이 들어가야 자동으로 인식돼요</span>
+      </div>
+    </details>
     <div class="icon-preview-card" id="iconPreviewCard">
       <p class="icon-preview-hint">위 버튼을 누르면 실제 카드에서 어떻게 안아주는지 바로 보여줘요</p>
     </div>
@@ -1169,6 +1224,7 @@ function createNoteEl(note, colorIdx){
   `;
   if(already) hugBtn.disabled = true;
   wireHugPress(hugBtn, note, wrap, countEl);
+  maybeShowHugHint(hugBtn);
 
   actions.appendChild(commentBtn);
   actions.appendChild(hugBtn);
@@ -1179,6 +1235,25 @@ function createNoteEl(note, colorIdx){
   wrap.appendChild(textEl);
   wrap.appendChild(footer);
   return wrap;
+}
+
+let hugHintShown = false;
+function maybeShowHugHint(hugBtn){
+  if(hugHintShown || localStorage.getItem('hugclub-seen-hug-hint')) return;
+  hugHintShown = true;
+  localStorage.setItem('hugclub-seen-hug-hint', '1');
+
+  const hint = document.createElement('div');
+  hint.className = 'hug-hint';
+  hint.textContent = '꾹 눌러보세요';
+  hugBtn.appendChild(hint);
+
+  const dismiss = ()=>{
+    hint.classList.add('hug-hint-hide');
+    setTimeout(()=> hint.remove(), 300);
+  };
+  hugBtn.addEventListener('pointerdown', dismiss, { once:true });
+  setTimeout(dismiss, 4000);
 }
 
 // 사이트 운영자 계정의 UID. 이 계정으로 로그인하면 남이 쓴 글도 삭제할 수 있다.
@@ -1953,10 +2028,12 @@ if(canUseFirestore){
 
 function renderAuthArea(){
   authArea.innerHTML = '';
+  const suggestionBtnEl = document.getElementById('suggestionBtn');
   if(!canUseFirestore){
     return;
   }
   if(!currentUser){
+    suggestionBtnEl.classList.remove('hidden');
     const loginBtn = document.createElement('button');
     loginBtn.className = 'auth-btn';
     loginBtn.innerHTML = `
@@ -2009,9 +2086,19 @@ function renderAuthArea(){
     settingsOverlay.classList.remove('hidden');
   });
 
+  const suggestionItem = document.createElement('button');
+  suggestionItem.className = 'profile-menu-item';
+  suggestionItem.textContent = '건의함';
+  suggestionItem.addEventListener('click', ()=>{
+    menu.classList.add('hidden');
+    openSuggestionBox();
+  });
+
   menu.appendChild(addIconItem);
   menu.appendChild(presetsItem);
   menu.appendChild(settingsItem);
+  menu.appendChild(suggestionItem);
+  suggestionBtnEl.classList.add('hidden');
 
   trigger.addEventListener('click', (e)=>{
     e.stopPropagation();
@@ -2444,14 +2531,15 @@ suggestionInput.addEventListener('input', ()=>{
   submitSuggestion.disabled = len === 0;
 });
 
-document.getElementById('suggestionBtn').addEventListener('click', ()=>{
+function openSuggestionBox(){
   suggestionInput.value = '';
   suggestionCharCount.textContent = '0';
   submitSuggestion.disabled = true;
   suggestionOverlay.classList.remove('hidden');
   if(isAdmin()) renderSuggestionAdminList();
   else suggestionAdminList.classList.add('hidden');
-});
+}
+document.getElementById('suggestionBtn').addEventListener('click', openSuggestionBox);
 
 submitSuggestion.addEventListener('click', async ()=>{
   const text = suggestionInput.value.trim();
