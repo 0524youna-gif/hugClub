@@ -1622,9 +1622,10 @@ function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl, intensity 
       const armR = document.createElement('img');
       armR.className = 'arm-img arm-img-right';
       armR.src = armsRightUrl;
+      // 얼굴/몸통보다 팔이 앞으로 감싸는 게 자연스러워서 팔을 나중에(=위에) 붙인다
+      layer.appendChild(img);
       layer.appendChild(armL);
       layer.appendChild(armR);
-      layer.appendChild(img);
       cardEl.appendChild(layer);
 
       requestAnimationFrame(()=>{
