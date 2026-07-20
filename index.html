@@ -1500,6 +1500,9 @@ async function handleHug(note, cardEl, btnEl, countEl, chosenIcon, intensity = 0
 
 function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl, intensity = 0){
   cardEl.style.position = 'relative';
+  // 카드마다 회전 효과(transform)가 걸려있어 각자 독립된 stacking context를 만든다.
+  // 그래서 안쪽 레이어에 z-index를 줘도 소용없고, 카드 자체를 다른 카드들보다 위로 올려야 한다.
+  cardEl.style.zIndex = '20';
   const layer = document.createElement('div');
   layer.className = 'anim-layer';
 
@@ -1536,7 +1539,7 @@ function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl, intensity 
         img.classList.add('fadeaway');
         layer.classList.add('fadeout');
       }, 2200 + holdExtra);
-      setTimeout(()=>{ layer.remove(); }, 3100 + holdExtra);
+      setTimeout(()=>{ layer.remove(); cardEl.style.zIndex = ''; }, 3100 + holdExtra);
       return;
     }
 
@@ -1545,7 +1548,7 @@ function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl, intensity 
 
     requestAnimationFrame(()=> img.classList.add(intensity > 0.5 ? 'squeeze' : 'pop'));
     setTimeout(()=>{ img.classList.add('fadeaway'); }, 2200 + holdExtra);
-    setTimeout(()=>{ layer.remove(); }, 3100 + holdExtra);
+    setTimeout(()=>{ layer.remove(); cardEl.style.zIndex = ''; }, 3100 + holdExtra);
     return;
   }
 
@@ -1584,6 +1587,7 @@ function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl, intensity 
 
   setTimeout(()=>{
     layer.remove();
+    cardEl.style.zIndex = '';
   }, 3100 + holdExtra);
 }
 
