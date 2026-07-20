@@ -477,6 +477,7 @@
     background: var(--card-bg); color: var(--ink); width: 100%; max-width: 440px;
     border-radius: 10px; padding: 26px 24px 20px; max-height: 86vh;
     display:flex; flex-direction: column;
+    overflow-y: auto;
   }
   .modal h3{ font-weight: 700; font-size: 19px; margin: 0 0 6px; }
   .modal p.hint{ margin: 0 0 16px; font-size: 13px; color: var(--ink-dim); line-height: 1.6; }
@@ -630,6 +631,7 @@
     position: relative;
     width: 220px;
     height: 220px;
+    flex-shrink: 0;
     margin: 0 auto 14px;
     border-radius: 50%;
     background: #fffdf8;
@@ -2081,12 +2083,14 @@ function drawGuideOverlay(layer){
   iconGuideCtx.lineCap = 'round';
 
   if(layer === 'arms'){
+    // 사람이 옆에서 감싸안을 때 팔 모양처럼: 어깨 쪽에서 나와 둥글게 휘어 앞으로 모이는 괄호 형태.
+    // 캔버스/카드 밖으로 안 나가게 폭을 좁게 잡았다 ("(" 왼팔, ")" 오른팔).
     iconGuideCtx.beginPath();
-    iconGuideCtx.arc(50, 140, 83, Math.PI*0.15, Math.PI*1.3);
+    iconGuideCtx.arc(85, 150, 58, Math.PI*0.5, Math.PI*1.5);
     iconGuideCtx.stroke();
 
     iconGuideCtx.beginPath();
-    iconGuideCtx.arc(170, 140, 83, Math.PI*1.7, Math.PI*0.85, true);
+    iconGuideCtx.arc(135, 150, 58, Math.PI*1.5, Math.PI*0.5);
     iconGuideCtx.stroke();
 
     // 허그 애니메이션에서 팔이 실제로 좌우로 잘리는 기준선
