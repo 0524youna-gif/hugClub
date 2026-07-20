@@ -887,6 +887,7 @@
     <div class="psd-upload-row">
       <input type="file" id="psdFileInput" accept=".psd" hidden>
       <button class="draw-tool-btn" id="psdUploadBtn">PSD로 업로드</button>
+      <button class="draw-tool-btn" id="sampleIconBtn">샘플 아이콘 적용하기</button>
       <span class="psd-upload-status" id="psdUploadStatus">레이어 이름에 "얼굴"/"어깨"/"팔"(face/shoulders/arm)이 들어가야 자동으로 인식돼요</span>
     </div>
     <div class="icon-preview-card" id="iconPreviewCard">
@@ -2548,9 +2549,8 @@ function flattenPsdLayers(nodes, out){
   return out;
 }
 
-async function loadIconLayersFromPsd(file){
+async function loadIconLayersFromPsdBuffer(buffer){
   const { readPsd } = await import('https://cdn.jsdelivr.net/npm/ag-psd/+esm');
-  const buffer = await file.arrayBuffer();
   const psd = readPsd(buffer);
   const scale = 220 / Math.max(psd.width, psd.height);
 
@@ -2577,6 +2577,24 @@ async function loadIconLayersFromPsd(file){
   return found;
 }
 
+// PSD에서 찾은 레이어를 화면(활성 레이어 캔버스 + 가이드 미리보기)에 반영하고 상태 문구를 띄운다.
+// 파일 업로드/샘플 적용 양쪽에서 공통으로 쓴다.
+function applyPsdLoadResult(found){
+  const labels = { face: '얼굴', shoulders: '어깨', arms: '팔' };
+  const statusEl = document.getElementById('psdUploadStatus');
+  if(found.length === 0){
+    statusEl.textContent = '레이어를 못 찾았어요. 레이어 이름에 "얼굴"/"어깨"/"팔"이 들어가야 해요.';
+    return;
+  }
+  const notFound = Object.keys(labels).filter(k => !found.includes(k));
+  statusEl.textContent = `${found.map(k=>labels[k]).join(', ')} 레이어를 불러왔어요.`
+    + (notFound.length ? ` (${notFound.map(k=>labels[k]).join(', ')}는 못 찾아서 그대로 둠)` : '');
+
+  iconCtx.clearRect(0,0,220,220);
+  iconCtx.drawImage(layerCanvases[activeLayer], 0, 0);
+  drawGuideOverlay(activeLayer);
+}
+
 document.getElementById('psdUploadBtn').addEventListener('click', ()=>{
   document.getElementById('psdFileInput').click();
 });
@@ -2586,25 +2604,25 @@ document.getElementById('psdFileInput').addEventListener('change', async (e)=>{
   if(!file) return;
 
   const statusEl = document.getElementById('psdUploadStatus');
-  const labels = { face: '얼굴', shoulders: '어깨', arms: '팔' };
   statusEl.textContent = 'PSD 읽는 중...';
-
   try{
-    const found = await loadIconLayersFromPsd(file);
-    if(found.length === 0){
-      statusEl.textContent = '레이어를 못 찾았어요. 레이어 이름에 "얼굴"/"어깨"/"팔"이 들어가야 해요.';
-      return;
-    }
-    const notFound = Object.keys(labels).filter(k => !found.includes(k));
-    statusEl.textContent = `${found.map(k=>labels[k]).join(', ')} 레이어를 불러왔어요.`
-      + (notFound.length ? ` (${notFound.map(k=>labels[k]).join(', ')}는 못 찾아서 그대로 둠)` : '');
-
-    iconCtx.clearRect(0,0,220,220);
-    iconCtx.drawImage(layerCanvases[activeLayer], 0, 0);
-    drawGuideOverlay(activeLayer);
+    applyPsdLoadResult(await loadIconLayersFromPsdBuffer(await file.arrayBuffer()));
   }catch(err){
     console.error('PSD 불러오기 실패', err);
     statusEl.textContent = 'PSD를 읽는 데 실패했어요. 파일이 맞는지 확인해주세요.';
+  }
+});
+
+document.getElementById('sampleIconBtn').addEventListener('click', async ()=>{
+  const statusEl = document.getElementById('psdUploadStatus');
+  statusEl.textContent = '샘플 아이콘 불러오는 중...';
+  try{
+    const res = await fetch('assets/sample-icon.psd');
+    if(!res.ok) throw new Error('fetch failed: ' + res.status);
+    applyPsdLoadResult(await loadIconLayersFromPsdBuffer(await res.arrayBuffer()));
+  }catch(err){
+    console.error('샘플 아이콘 불러오기 실패', err);
+    statusEl.textContent = '샘플 아이콘을 불러오는 데 실패했어요.';
   }
 });
 
