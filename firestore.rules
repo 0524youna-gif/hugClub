@@ -34,5 +34,12 @@ service cloud.firestore {
       allow update: if true;
       allow delete: if true;
     }
+
+    match /suggestions/{suggestionId} {
+      // 누구나 익명으로 건의는 남길 수 있지만, 읽고 지우는 건 관리자만 (index.html의 ADMIN_UID와 동일해야 함)
+      allow create: if true;
+      allow read, delete: if request.auth != null
+        && request.auth.uid == '9YPG4WJR4pOcLvtgGlhHGaT5FcD2';
+    }
   }
 }

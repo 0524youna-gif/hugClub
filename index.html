@@ -220,6 +220,38 @@
     min-height: 60px;
   }
   .notif-item + .notif-item{ border-top: 1px solid rgba(91,70,54,0.1); }
+
+  .suggestion-admin-list{
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(91,70,54,0.12);
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .suggestion-admin-list.hidden{ display:none; }
+  .suggestion-admin-title{ margin: 0 0 8px; font-size: 12px; font-weight:700; color: var(--ink-dim); }
+  .suggestion-item{
+    position: relative;
+    padding: 10px 32px 10px 4px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+  .suggestion-item + .suggestion-item{ border-top: 1px solid rgba(91,70,54,0.08); }
+  .suggestion-item-delete{
+    position: absolute; top: 8px; right: 0;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(91,70,54,0.08);
+    color: rgba(91,70,54,0.6);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .suggestion-item-delete:hover{ background: rgba(200,60,60,0.15); color: #b23b3b; }
   .notif-msg{ margin: 0 0 8px; font-size: 13px; line-height: 1.5; color: var(--ink); }
   .notif-avatars{ display:flex; gap: 6px; flex-wrap: wrap; }
   .notif-avatar{
@@ -758,6 +790,9 @@
         <div class="notif-empty">아직 알림이 없어요.</div>
       </div>
     </div>
+    <button class="notif-bell" id="suggestionBtn" title="건의하기">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m4 6 8 7 8-7"/></svg>
+    </button>
     <div id="authArea"></div>
   </div>
 </div>
@@ -883,6 +918,22 @@
       <button class="btn-ghost" id="closePresetManager">닫기</button>
       <button class="btn-primary" id="savePresets">저장</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="suggestionOverlay">
+  <div class="modal">
+    <h3>건의함</h3>
+    <p class="hint">사이트에 바라는 점이나 불편했던 점을 익명으로 남겨주세요.</p>
+    <textarea id="suggestionInput" maxlength="500" placeholder="여기에 적어주세요"></textarea>
+    <div class="modal-footer">
+      <span class="char-count"><span id="suggestionCharCount">0</span>/500</span>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="closeSuggestion">닫기</button>
+        <button class="btn-primary" id="submitSuggestion" disabled>보내기</button>
+      </div>
+    </div>
+    <div class="suggestion-admin-list hidden" id="suggestionAdminList"></div>
   </div>
 </div>
 
@@ -2372,6 +2423,81 @@ document.getElementById('savePresets').addEventListener('click', async ()=>{
     reportFailure('프리셋 저장', e);
   }
 });
+
+/* ---- 건의함: 누구나 익명으로 남기고, 관리자만 목록을 볼 수 있다 ---- */
+const suggestionOverlay = document.getElementById('suggestionOverlay');
+const suggestionInput = document.getElementById('suggestionInput');
+const suggestionCharCount = document.getElementById('suggestionCharCount');
+const submitSuggestion = document.getElementById('submitSuggestion');
+const suggestionAdminList = document.getElementById('suggestionAdminList');
+
+wireSimpleOverlay(suggestionOverlay, document.getElementById('closeSuggestion'));
+
+suggestionInput.addEventListener('input', ()=>{
+  const len = suggestionInput.value.length;
+  suggestionCharCount.textContent = len;
+  submitSuggestion.disabled = len === 0;
+});
+
+document.getElementById('suggestionBtn').addEventListener('click', ()=>{
+  suggestionInput.value = '';
+  suggestionCharCount.textContent = '0';
+  submitSuggestion.disabled = true;
+  suggestionOverlay.classList.remove('hidden');
+  if(isAdmin()) renderSuggestionAdminList();
+  else suggestionAdminList.classList.add('hidden');
+});
+
+submitSuggestion.addEventListener('click', async ()=>{
+  const text = suggestionInput.value.trim();
+  if(!text || !canUseFirestore) return;
+  submitSuggestion.disabled = true;
+  try{
+    await db.collection('suggestions').add({ text, createdAt: Date.now() });
+    suggestionInput.value = '';
+    suggestionCharCount.textContent = '0';
+    alert('보내주셔서 감사해요. 잘 전달됐어요!');
+    suggestionOverlay.classList.add('hidden');
+  }catch(e){
+    reportFailure('건의 보내기', e);
+    submitSuggestion.disabled = false;
+  }
+});
+
+async function renderSuggestionAdminList(){
+  suggestionAdminList.classList.remove('hidden');
+  suggestionAdminList.innerHTML = '<p class="suggestion-admin-title">받은 건의 (관리자만 보여요)</p><div class="notif-empty">불러오는 중...</div>';
+  try{
+    const snap = await db.collection('suggestions').orderBy('createdAt', 'desc').get();
+    suggestionAdminList.innerHTML = '<p class="suggestion-admin-title">받은 건의 (관리자만 보여요)</p>';
+    if(snap.empty){
+      suggestionAdminList.insertAdjacentHTML('beforeend', '<div class="notif-empty">아직 들어온 건의가 없어요.</div>');
+      return;
+    }
+    snap.forEach(doc=>{
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      item.textContent = doc.data().text || '';
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'suggestion-item-delete';
+      delBtn.title = '이 건의 삭제하기';
+      delBtn.textContent = '×';
+      delBtn.addEventListener('click', async ()=>{
+        try{
+          await doc.ref.delete();
+          item.remove();
+        }catch(e){ reportFailure('건의 삭제', e); }
+      });
+      item.appendChild(delBtn);
+
+      suggestionAdminList.appendChild(item);
+    });
+  }catch(e){
+    console.error('건의함 불러오기 실패', e);
+    suggestionAdminList.innerHTML = '<p class="suggestion-admin-title">받은 건의 (관리자만 보여요)</p><div class="notif-empty">불러오지 못했어요.</div>';
+  }
+}
 
 // 지금 보이는 캔버스(활성 레이어)를 저장소에 반영하고, 어깨(뒤)+얼굴(앞)을 합쳐서
 // 저장/미리보기 양쪽에서 쓰는 몸통 한 장 + 팔 한 장을 만들어 돌려준다.
