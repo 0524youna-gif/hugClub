@@ -683,6 +683,19 @@
   }
   .draw-tool-btn.active{ background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 
+  .psd-upload-row{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 2px 0 14px;
+  }
+  .psd-upload-status{
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.5;
+  }
+
   .icon-preview-card{
     position: relative;
     max-width: 260px;
@@ -835,6 +848,11 @@
       <button class="draw-tool-btn" id="eraserBtn">지우개</button>
       <button class="draw-tool-btn" id="resetCanvasBtn">도안으로 초기화</button>
       <button class="draw-tool-btn" id="previewHugBtn">미리보기로 안아보기</button>
+    </div>
+    <div class="psd-upload-row">
+      <input type="file" id="psdFileInput" accept=".psd" hidden>
+      <button class="draw-tool-btn" id="psdUploadBtn">PSD로 업로드</button>
+      <span class="psd-upload-status" id="psdUploadStatus">레이어 이름에 "얼굴"/"어깨"/"팔"(face/shoulders/arm)이 들어가야 자동으로 인식돼요</span>
     </div>
     <div class="icon-preview-card" id="iconPreviewCard">
       <p class="icon-preview-hint">위 버튼을 누르면 실제 카드에서 어떻게 안아주는지 바로 보여줘요</p>
@@ -2385,6 +2403,82 @@ document.getElementById('previewHugBtn').addEventListener('click', async ()=>{
   const previewCard = document.getElementById('iconPreviewCard');
   previewCard.querySelectorAll('.anim-layer').forEach(l => l.remove()); // 연타 시 중복 재생 방지
   playHugAnimation(previewCard, bodyDataUrl, armsLeft, armsRight, 0.6);
+});
+
+/* ---- PSD 업로드: 레이어 이름으로 얼굴/어깨/팔을 자동 인식해서 캔버스에 넣는다 ---- */
+const PSD_LAYER_KEYWORDS = {
+  face: ['얼굴', 'face'],
+  shoulders: ['어깨', 'shoulder'],
+  arms: ['팔', 'arm'],
+};
+
+function flattenPsdLayers(nodes, out){
+  out = out || [];
+  (nodes || []).forEach(node=>{
+    if(node.children) flattenPsdLayers(node.children, out);
+    else if(node.canvas) out.push(node);
+  });
+  return out;
+}
+
+async function loadIconLayersFromPsd(file){
+  const { readPsd } = await import('https://cdn.jsdelivr.net/npm/ag-psd/+esm');
+  const buffer = await file.arrayBuffer();
+  const psd = readPsd(buffer);
+  const scale = 220 / Math.max(psd.width, psd.height);
+
+  const layers = flattenPsdLayers(psd.children);
+  const findLayer = keywords => layers.find(l=>{
+    const name = (l.name || '').toLowerCase();
+    return keywords.some(k => name.includes(k.toLowerCase()));
+  });
+
+  const found = [];
+  Object.entries(PSD_LAYER_KEYWORDS).forEach(([key, keywords])=>{
+    const layer = findLayer(keywords);
+    if(!layer) return;
+    const ctx = layerCanvases[key].getContext('2d');
+    ctx.clearRect(0,0,220,220);
+    ctx.drawImage(
+      layer.canvas,
+      (layer.left || 0) * scale, (layer.top || 0) * scale,
+      layer.canvas.width * scale, layer.canvas.height * scale
+    );
+    found.push(key);
+  });
+
+  return found;
+}
+
+document.getElementById('psdUploadBtn').addEventListener('click', ()=>{
+  document.getElementById('psdFileInput').click();
+});
+document.getElementById('psdFileInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  e.target.value = ''; // 같은 파일 다시 골라도 change가 뜨도록 초기화
+  if(!file) return;
+
+  const statusEl = document.getElementById('psdUploadStatus');
+  const labels = { face: '얼굴', shoulders: '어깨', arms: '팔' };
+  statusEl.textContent = 'PSD 읽는 중...';
+
+  try{
+    const found = await loadIconLayersFromPsd(file);
+    if(found.length === 0){
+      statusEl.textContent = '레이어를 못 찾았어요. 레이어 이름에 "얼굴"/"어깨"/"팔"이 들어가야 해요.';
+      return;
+    }
+    const notFound = Object.keys(labels).filter(k => !found.includes(k));
+    statusEl.textContent = `${found.map(k=>labels[k]).join(', ')} 레이어를 불러왔어요.`
+      + (notFound.length ? ` (${notFound.map(k=>labels[k]).join(', ')}는 못 찾아서 그대로 둠)` : '');
+
+    iconCtx.clearRect(0,0,220,220);
+    iconCtx.drawImage(layerCanvases[activeLayer], 0, 0);
+    drawGuideOverlay(activeLayer);
+  }catch(err){
+    console.error('PSD 불러오기 실패', err);
+    statusEl.textContent = 'PSD를 읽는 데 실패했어요. 파일이 맞는지 확인해주세요.';
+  }
 });
 
 saveIcon.addEventListener('click', async ()=>{
