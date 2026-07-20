@@ -365,6 +365,19 @@
   .icon-btn:active{ transform: scale(0.95); }
   .icon-btn.hugged{ background: rgba(91,70,54,0.05); color: rgba(91,70,54,0.5); cursor: default; }
   .icon-btn svg{ width: 15px; height: 15px; }
+  /* 허그 버튼을 오래 누르고 있을 때 차오르는 링. --charge(0~100)는 JS가 실시간으로 갱신한다 */
+  .icon-btn.hug-charging{
+    transform: scale(1.08);
+    transition: transform 0.12s ease;
+  }
+  .icon-btn.hug-charging::before{
+    content:'';
+    position:absolute;
+    inset: -4px;
+    border-radius: 999px;
+    background: conic-gradient(var(--accent-hover) calc(var(--charge, 0) * 1%), transparent 0);
+    z-index: -1;
+  }
   .icon-btn.delete-btn{ padding: 8px; color: rgba(91,70,54,0.5); }
   .icon-btn.delete-btn:hover{ background: rgba(200,60,60,0.12); color: #b23b3b; }
 
@@ -409,6 +422,7 @@
     opacity:0; transform: translate(-50%,-50%);
   }
   .hug-icon-anim{
+    --hug-scale: 1;
     position:absolute;
     left: 50%;
     top: 50%;
@@ -423,14 +437,22 @@
   }
   .hug-icon-anim.pop{ animation: hugIconPop 0.55s cubic-bezier(0.34,1.4,0.64,1) forwards; }
   .hug-icon-anim.fadeaway{ animation: hugIconFade 0.9s ease forwards; }
+  /* 오래 눌러서 안았을 때: 팝업 애니메이션이 끝난 자리에서 두 번 지그시 눌렀다 펴지는 스퀴즈 추가 */
+  .hug-icon-anim.squeeze{
+    animation: hugIconPop 0.55s cubic-bezier(0.34,1.4,0.64,1) forwards, hugSqueeze 0.42s ease-in-out 0.55s 2;
+  }
   @keyframes hugIconPop{
     0%{ opacity:0; transform: scale(0.4) rotate(-8deg); }
-    60%{ opacity:1; transform: scale(1.08) rotate(3deg); }
-    100%{ opacity:1; transform: scale(1) rotate(0deg); }
+    60%{ opacity:1; transform: scale(calc(var(--hug-scale) * 1.08)) rotate(3deg); }
+    100%{ opacity:1; transform: scale(var(--hug-scale)) rotate(0deg); }
+  }
+  @keyframes hugSqueeze{
+    0%, 100%{ transform: scale(var(--hug-scale)); }
+    50%{ transform: scale(calc(var(--hug-scale) * 0.86)); }
   }
   @keyframes hugIconFade{
-    0%{ opacity:1; transform: scale(1); }
-    100%{ opacity:0; transform: scale(0.85) translateY(-14px); }
+    0%{ opacity:1; transform: scale(var(--hug-scale)); }
+    100%{ opacity:0; transform: scale(calc(var(--hug-scale) * 0.85)) translateY(-14px); }
   }
   .heart-particle.float{ animation: heartFloat 1.1s ease forwards; }
   @keyframes heartFloat{
@@ -643,12 +665,12 @@
 
 <img class="bg-clover" src="assets/clover.webp" alt="" aria-hidden="true">
 
-<h2 class="sr-only">허그 클럽: 사람들이 익명으로 사연을 남기고, 허그 버튼과 사연별 익명 채팅으로 서로 포옹을 나누는 게시판입니다.</h2>
+<h2 class="sr-only">허그 클럽: 익명으로 메모를 남기고, 허그 버튼과 메모별 익명 채팅으로 서로 포옹을 나누는 게시판입니다.</h2>
 
 <div class="topbar">
   <div class="brand">
     <h1>허그 클럽</h1>
-    <p>오세요 허그클럽. 상처받은 당신을 안아드립니다. (* 주의사항: 공감금지, 연민금지, 이해금지) 사실 해도 돼요 </p>
+    <p>오세요 허그클럽. 당신을 안아드립니다.  </p>
     <span class="visitor-count hidden" id="visitorCount"><span class="visitor-count-dot"></span><span id="visitorCountLabel"></span></span>
   </div>
   <div class="topbar-actions">
@@ -688,8 +710,8 @@
     <p class="announcement-text" id="promptText"></p>
   </div>
   <div id="emptyState" class="empty-state" style="display:none;">
-    <h2>아직 아무도 마음을 꺼내놓지 않았어요</h2>
-    <p>여기엔 이름도, 얼굴도 없어요.<br>하고 싶었던 말을 남겨보세요.</p>
+    <h2>아직 이야기가 없습니다.</h2>
+    <p>하고 싶었던 말을 남겨보세요.</p>
     <button class="write-btn" id="openWriteEmpty" style="margin: 0 auto;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       첫 이야기 남기기
@@ -697,8 +719,8 @@
   </div>
   <div class="sort-bar">
     <button class="sort-btn active" data-sort="createdAt_desc">최신순</button>
-    <button class="sort-btn" data-sort="hugs_desc">위로 많은순</button>
-    <button class="sort-btn" data-sort="hugs_asc">위로 적은순</button>
+    <button class="sort-btn" data-sort="hugs_desc">허그 많은순</button>
+    <button class="sort-btn" data-sort="hugs_asc">허그 적은순</button>
     <button class="sort-btn" data-sort="commentCount_desc">채팅 많은순</button>
   </div>
   <div class="board" id="board"></div>
@@ -706,9 +728,9 @@
 
 <div class="modal-overlay hidden" id="modalOverlay">
   <div class="modal">
-    <h3>익명으로 마음 남기기</h3>
-    <p class="hint">이름은 남지 않아요. 오늘 있었던 일, 하고 싶었던 말, 무엇이든 괜찮아요.</p>
-    <textarea id="noteInput" maxlength="400" placeholder="오늘 유난히 힘든 일이 있었어..."></textarea>
+    <h3>익명으로 글쓰기</h3>
+    <p class="hint">아무 이야기나 적어보세요.</p>
+    <textarea id="noteInput" maxlength="400" placeholder="나 안아..."></textarea>
     <div class="modal-footer">
       <span class="char-count"><span id="charCount">0</span>/400</span>
       <div class="modal-actions">
@@ -721,7 +743,7 @@
 
 <div class="modal-overlay hidden" id="detailOverlay">
   <div class="modal">
-    <h3>이 사연의 채팅방</h3>
+    <h3>이 이야기의 채팅방</h3>
     <div class="detail-note-text" id="detailNoteText"></div>
     <div class="identity-badge">
       <span class="identity-dot" id="myIdentityDot"></span>
@@ -849,21 +871,24 @@ const DAILY_PROMPTS = [
   '최근에 나를 울게 한 건 뭐였나요?',
   '지금 내 마음의 날씨는 어떤가요?',
   '오늘 하루를 색깔로 표현한다면?',
-  '요즘 혼자 삭이고 있는 걱정이 있나요?',
   '지금 누구보다 나 자신에게 해주고 싶은 말은?',
-  '오늘 유난히 무거웠던 마음이 있었나요?',
-  '최근에 나를 지치게 한 일은 뭔가요?',
   '지금 이 순간 가장 안기고 싶은 사람은 누구인가요?',
   '오늘 하루, 버티느라 고생한 나에게 하고 싶은 말은?',
-  '요즘 자꾸 참게 되는 감정이 있나요?',
   '지금 털어놓고 싶은데 못 하고 있는 이야기가 있나요?',
   '오늘 나를 가장 웃게 한 사람은 누구였나요?',
-  '최근에 마음이 놓였던 순간은 언제였나요?',
-  '요즘 가장 자주 삼키는 말은 뭔가요?',
-  '지금 이 순간 솔직히 어떤 기분인가요?',
   '오늘 하루, 나를 버티게 해준 건 뭐였나요?',
   '요즘 나를 가장 잘 안아줄 수 있는 사람은 누구인가요?',
-  '지금 이 글을 읽는 당신, 오늘 하루 정말 수고 많았어요.',
+  "요즘 자주 듣는 노래가 있나요?",
+  "오늘 먹은 것 중 가장 맛있었던 건?",
+  "최근에 웃었던 일이 있었나요?",
+  "지금 떠오르는 사람이 있나요?",
+  "오늘 하루를 한 단어로 표현한다면?",
+  "요즘 가장 자주 하는 생각은?",
+  "지금 가장 가고 싶은 곳은?",
+  "오늘 가장 마음에 들었던 순간은?",
+  "오늘 스스로에게 한마디 한다면?",
+  "오늘 하루는 몇 점이었나요? (100점 만점)",
+  "지금 가장 먼저 떠오르는 이야기를 들려주세요."
 ];
 function renderDailyPrompt(){
   const now = new Date();
@@ -1017,7 +1042,7 @@ function createNoteEl(note, colorIdx){
     <span class="hug-label">${already ? '안아줬어요' : '허그하기'}</span>
   `;
   if(already) hugBtn.disabled = true;
-  hugBtn.addEventListener('click', ()=> onHugButtonClick(note, wrap, hugBtn, countEl));
+  wireHugPress(hugBtn, note, wrap, countEl);
 
   actions.appendChild(commentBtn);
   actions.appendChild(hugBtn);
@@ -1316,14 +1341,65 @@ async function getIconArmsSplit(icon){
 
 let closeOpenHugPicker = null; // 지금 열려있는 허그 프리셋 피커를 닫는 함수
 
-// 허그 버튼을 누르면, 프리셋이 있으면 골라서 안아주고 없으면 바로 안아준다 (비리얼 반응 방식)
-async function onHugButtonClick(note, cardEl, btnEl, countEl){
+const HUG_HOLD_MAX = 1200;          // 이 이상 누르고 있으면 최대 강도(꽉 안기)
+const HUG_HOLD_TAP_THRESHOLD = 220; // 이보다 짧게 누르면 그냥 가벼운 탭으로 취급
+
+// 허그 버튼을 꾹 누르고 있으면 오래 누를수록 더 꽉 안는 느낌이 나도록 강도를 계산한다.
+// 짧은 탭은 기존처럼 프리셋 피커를 띄우고, 길게 누르면 피커 없이 바로(지금 대표 아이콘으로) 안아준다.
+function wireHugPress(hugBtn, note, cardEl, countEl){
+  let pressStart = 0;
+  let raf = null;
+
+  function tickCharge(){
+    const elapsed = Date.now() - pressStart;
+    hugBtn.style.setProperty('--charge', Math.min(100, (elapsed / HUG_HOLD_MAX) * 100));
+    if(elapsed < HUG_HOLD_MAX) raf = requestAnimationFrame(tickCharge);
+  }
+
+  function startPress(){
+    if(huggedIds.has(note.id) || hugBtn.disabled) return;
+    pressStart = Date.now();
+    hugBtn.classList.add('hug-charging');
+    raf = requestAnimationFrame(tickCharge);
+  }
+
+  function endPress(shouldTrigger){
+    if(!pressStart) return;
+    const heldMs = Date.now() - pressStart;
+    pressStart = 0;
+    cancelAnimationFrame(raf);
+    hugBtn.classList.remove('hug-charging');
+    hugBtn.style.removeProperty('--charge');
+    if(!shouldTrigger) return;
+
+    if(heldMs < HUG_HOLD_TAP_THRESHOLD){
+      onHugButtonClick(note, cardEl, hugBtn, countEl, 0);
+    } else {
+      const intensity = Math.min(1, heldMs / HUG_HOLD_MAX);
+      handleHug(note, cardEl, hugBtn, countEl, getPrimaryIcon(), intensity);
+    }
+  }
+
+  hugBtn.addEventListener('pointerdown', startPress);
+  hugBtn.addEventListener('pointerup', ()=> endPress(true));
+  hugBtn.addEventListener('pointercancel', ()=> endPress(false));
+  hugBtn.addEventListener('pointerleave', ()=> endPress(false));
+
+  // 키보드(Tab + Enter/Space)로 활성화된 경우 pointerdown/up이 전혀 안 뜨므로 click으로 따로 받아준다.
+  // 실제 마우스/터치 클릭은 detail이 1 이상이라 이미 위에서 처리된 걸 여기서 또 발동시키지 않는다.
+  hugBtn.addEventListener('click', (e)=>{
+    if(e.detail === 0) onHugButtonClick(note, cardEl, hugBtn, countEl, 0);
+  });
+}
+
+// 프리셋이 있으면 골라서 안아주고 없으면 바로 안아준다 (비리얼 반응 방식). intensity는 꾹 누른 정도(0~1).
+async function onHugButtonClick(note, cardEl, btnEl, countEl, intensity = 0){
   if(huggedIds.has(note.id) || btnEl.disabled) return;
   if(closeOpenHugPicker){ closeOpenHugPicker(); closeOpenHugPicker = null; }
 
   const presets = myPresetIds.map(id => myIcons.find(i => i.id === id)).filter(Boolean);
   if(!currentUser || presets.length === 0){
-    handleHug(note, cardEl, btnEl, countEl, null);
+    handleHug(note, cardEl, btnEl, countEl, null, intensity);
     return;
   }
 
@@ -1338,7 +1414,7 @@ async function onHugButtonClick(note, cardEl, btnEl, countEl){
       ev.stopPropagation();
       picker.remove();
       closeOpenHugPicker = null;
-      handleHug(note, cardEl, btnEl, countEl, icon);
+      handleHug(note, cardEl, btnEl, countEl, icon, intensity);
     });
     picker.appendChild(av);
   });
@@ -1353,21 +1429,24 @@ async function onHugButtonClick(note, cardEl, btnEl, countEl){
   closeOpenHugPicker = closePicker;
 }
 
-// 포근하게 안기는 느낌의 진동 패턴 (짧게 눌렸다가 좀 더 길게 꽉). 모바일 아니면 조용히 무시됨.
-function vibrateHug(){
-  if(navigator.vibrate) navigator.vibrate([30, 40, 90]);
+// 포근하게 안기는 느낌의 진동 패턴. 꾹 눌러 안을수록 더 강하고 길게 울린다. 모바일 아니면 조용히 무시됨.
+function vibrateHug(intensity = 0){
+  if(!navigator.vibrate) return;
+  if(intensity > 0.6) navigator.vibrate([40, 30, 60, 30, 130]);
+  else if(intensity > 0) navigator.vibrate([35, 35, 100]);
+  else navigator.vibrate([30, 40, 90]);
 }
 
-async function handleHug(note, cardEl, btnEl, countEl, chosenIcon){
+async function handleHug(note, cardEl, btnEl, countEl, chosenIcon, intensity = 0){
   if(huggedIds.has(note.id)) return;
   huggedIds.add(note.id);
   btnEl.disabled = true;
   btnEl.classList.add('hugged');
   btnEl.querySelector('.hug-label').textContent = '안아줬어요';
 
-  vibrateHug();
+  vibrateHug(intensity);
   const armsSplit = await getIconArmsSplit(chosenIcon);
-  playHugAnimation(cardEl, chosenIcon ? chosenIcon.hugIcon : null, armsSplit.left, armsSplit.right);
+  playHugAnimation(cardEl, chosenIcon ? chosenIcon.hugIcon : null, armsSplit.left, armsSplit.right, intensity);
 
   note.hugs = (note.hugs || 0) + 1;
   countEl.textContent = `따뜻함 ${note.hugs}`;
@@ -1391,15 +1470,20 @@ async function handleHug(note, cardEl, btnEl, countEl, chosenIcon){
   localStorage.setItem('hugged-by-me', JSON.stringify(Array.from(huggedIds)));
 }
 
-function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl){
+function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl, intensity = 0){
   cardEl.style.position = 'relative';
   const layer = document.createElement('div');
   layer.className = 'anim-layer';
+
+  // 오래 눌러 안을수록: 아이콘이 조금 더 크게 팝업되고, 눌렸다 펴지는 스퀴즈가 추가되고, 더 오래 머문다
+  const scale = 1 + intensity * 0.35;
+  const holdExtra = intensity * 900;
 
   if(iconUrl){
     // 로그인해서 저장해둔 나만의 허그 아이콘으로 안아주기
     const img = document.createElement('img');
     img.className = 'hug-icon-anim';
+    img.style.setProperty('--hug-scale', scale);
     img.src = iconUrl;
 
     if(armsLeftUrl && armsRightUrl){
@@ -1416,24 +1500,24 @@ function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl){
       cardEl.appendChild(layer);
 
       requestAnimationFrame(()=>{
-        img.classList.add('pop');
+        img.classList.add(intensity > 0.5 ? 'squeeze' : 'pop');
         armL.classList.add('close');
         armR.classList.add('close');
       });
       setTimeout(()=>{
         img.classList.add('fadeaway');
         layer.classList.add('fadeout');
-      }, 2200);
-      setTimeout(()=>{ layer.remove(); }, 3100);
+      }, 2200 + holdExtra);
+      setTimeout(()=>{ layer.remove(); }, 3100 + holdExtra);
       return;
     }
 
     layer.appendChild(img);
     cardEl.appendChild(layer);
 
-    requestAnimationFrame(()=> img.classList.add('pop'));
-    setTimeout(()=>{ img.classList.add('fadeaway'); }, 2200);
-    setTimeout(()=>{ layer.remove(); }, 3100);
+    requestAnimationFrame(()=> img.classList.add(intensity > 0.5 ? 'squeeze' : 'pop'));
+    setTimeout(()=>{ img.classList.add('fadeaway'); }, 2200 + holdExtra);
+    setTimeout(()=>{ layer.remove(); }, 3100 + holdExtra);
     return;
   }
 
@@ -1445,7 +1529,8 @@ function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl){
   layer.appendChild(armL);
   layer.appendChild(armR);
 
-  for(let i=0;i<4;i++){
+  const heartCount = 4 + Math.round(intensity * 3);
+  for(let i=0;i<heartCount;i++){
     const heart = document.createElement('div');
     heart.className = 'heart-particle';
     heart.textContent = '♥';
@@ -1467,11 +1552,11 @@ function playHugAnimation(cardEl, iconUrl, armsLeftUrl, armsRightUrl){
 
   setTimeout(()=>{
     layer.classList.add('fadeout');
-  }, 2200);
+  }, 2200 + holdExtra);
 
   setTimeout(()=>{
     layer.remove();
-  }, 3100);
+  }, 3100 + holdExtra);
 }
 
 
